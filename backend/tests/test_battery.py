@@ -35,3 +35,20 @@ def test_battery_bounds_are_inclusive():
     assert NormalizedListing(battery_kwh=9.9).battery_kwh is None
     assert NormalizedListing(battery_soh_pct=0).battery_soh_pct == 0
     assert NormalizedListing(battery_soh_pct=100).battery_soh_pct == 100
+
+
+from carcatcher.normalization.prompts import NORMALIZATION_SYSTEM
+from carcatcher.normalization.schema import NORMALIZED_TOOL_SCHEMA
+
+
+def test_tool_schema_exposes_battery_fields():
+    props = NORMALIZED_TOOL_SCHEMA["properties"]
+    assert "battery_kwh" in props
+    assert "battery_soh_pct" in props
+
+
+def test_prompt_mentions_battery_and_reichweite_guard():
+    # Must instruct extraction and must warn that Reichweite (range) != capacity.
+    assert "battery_kwh" in NORMALIZATION_SYSTEM
+    assert "battery_soh_pct" in NORMALIZATION_SYSTEM
+    assert "Reichweite" in NORMALIZATION_SYSTEM

@@ -83,6 +83,16 @@ NORMALIZED_TOOL_SCHEMA: dict = {
         "fuel": {"type": ["string", "null"], "enum": [*sorted(FUELS), None]},
         "transmission": {"type": ["string", "null"], "enum": [*sorted(TRANSMISSIONS), None]},
         "power_kw": {**_int(), "description": "Engine power in kW (convert from PS: kW≈PS*0.7355)"},
+        "battery_kwh": {
+            "type": ["number", "null"],
+            "description": "EV usable battery capacity in kWh (electric/hybrid only). "
+            "NOT the range in km (Reichweite). null if not stated.",
+        },
+        "battery_soh_pct": {
+            **_int(),
+            "description": "EV battery State of Health as a percent 0-100 "
+            "(electric/hybrid only). null if not stated.",
+        },
         "body_type": _str(),
         "location_city": _str(),
         "location_plz": {**_str(), "description": "German postal code (PLZ)"},
