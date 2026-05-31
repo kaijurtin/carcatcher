@@ -1,6 +1,6 @@
 /** Thin fetch wrapper around the CarCatcher API. */
 
-import type { ListingsPage, ListingQuery, CrawlRun } from "../types";
+import type { ListingsPage, ListingQuery, CrawlRun, Listing } from "../types";
 
 const BASE = "/api";
 
@@ -39,6 +39,21 @@ export function getListings(query: ListingQuery = {}): Promise<ListingsPage> {
   }
   const qs = params.toString();
   return apiGet<ListingsPage>(`/listings${qs ? `?${qs}` : ""}`);
+}
+
+export function getListing(id: number): Promise<Listing> {
+  return apiGet<Listing>(`/listings/${id}`);
+}
+
+export async function evaluateListing(id: number): Promise<Listing> {
+  const resp = await fetch(`${BASE}/listings/${id}/evaluate`, { method: "POST" });
+  if (resp.status === 409) {
+    throw new ApiError(409, "AI is disabled or unconfigured on the server");
+  }
+  if (!resp.ok) {
+    throw new ApiError(resp.status, `Evaluation failed: ${resp.status}`);
+  }
+  return (await resp.json()) as Listing;
 }
 
 export function getRuns(limit = 10): Promise<CrawlRun[]> {

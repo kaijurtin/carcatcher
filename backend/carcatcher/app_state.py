@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from carcatcher.ai.client import AIClient
+from carcatcher.ai.evaluate import Evaluator
 from carcatcher.config import Settings, get_settings
 from carcatcher.normalization.extractor import Extractor
 from carcatcher.scraping.base import Scraper
@@ -22,7 +23,9 @@ if TYPE_CHECKING:
 class AppState:
     firecrawl: FirecrawlClient
     scrapers: dict[str, Scraper]
+    ai: AIClient
     extractor: Extractor
+    evaluator: Evaluator
     scheduler: "AsyncIOScheduler | None" = None
     crawl_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -34,8 +37,14 @@ def build_state(settings: Settings | None = None) -> AppState:
     settings = settings or get_settings()
     firecrawl = FirecrawlClient(settings)
     scrapers = build_registry(firecrawl)
-    extractor = Extractor(AIClient(settings))
-    return AppState(firecrawl=firecrawl, scrapers=scrapers, extractor=extractor)
+    ai = AIClient(settings)
+    return AppState(
+        firecrawl=firecrawl,
+        scrapers=scrapers,
+        ai=ai,
+        extractor=Extractor(ai),
+        evaluator=Evaluator(ai),
+    )
 
 
 def set_state(state: AppState | None) -> None:

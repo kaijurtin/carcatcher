@@ -151,3 +151,24 @@ def get_listing(
     if listing is None:
         raise HTTPException(status_code=404, detail="listing not found")
     return ListingRead.model_validate(listing)
+
+
+@router.post("/listings/{listing_id}/evaluate", response_model=ListingRead)
+async def evaluate_listing(
+    listing_id: int, session: Session = Depends(get_session)
+) -> ListingRead:
+    """Force a Sonnet evaluation of one listing on demand."""
+    from carcatcher.app_state import get_state
+    from carcatcher.pipeline.evaluate import evaluate_one
+
+    listing = session.get(Listing, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=404, detail="listing not found")
+
+    evaluator = get_state().evaluator
+    if not evaluator.enabled:
+        raise HTTPException(status_code=409, detail="AI is disabled or unconfigured")
+
+    await evaluate_one(session, evaluator, listing)
+    session.refresh(listing)
+    return ListingRead.model_validate(listing)

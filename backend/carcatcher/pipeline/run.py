@@ -74,6 +74,8 @@ def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
         # Content changed → invalidate downstream AI/scoring so it recomputes.
         existing.normalized_at = None
         existing.scored_at = None
+        existing.ai_evaluated_at = None
+        existing.ai_evaluation = None
     session.add(existing)
     session.commit()
     return "updated"
@@ -116,6 +118,7 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
     recorded in a CrawlRun. Returns the run id, or None if a crawl is already
     in flight. Imports are local to avoid an app_state import cycle."""
     from carcatcher.app_state import get_state
+    from carcatcher.pipeline.evaluate import evaluate_candidates
     from carcatcher.pipeline.normalize import normalize_pending
     from carcatcher.pipeline.score import score_active
     from carcatcher.pipeline.snapshot import mark_gone, prune_gone, reclaim_stale_runs
@@ -151,6 +154,7 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
                 norm = await normalize_pending(session, state.extractor, source=source)
                 gone = mark_gone(session, source, started)
                 score_active(session, source=source)
+                ev = await evaluate_candidates(session, state.evaluator)
                 prune_gone(session, settings.prune_gone_days)
 
                 run = session.get(CrawlRun, run_id)
@@ -159,14 +163,16 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
                 run.listings_updated = crawl.updated
                 run.listings_gone = gone
                 run.haiku_calls = norm.haiku_calls
-                run.est_cost_usd = round(norm.cost_usd, 6)
+                run.sonnet_calls = ev.sonnet_calls
+                run.est_cost_usd = round(norm.cost_usd + ev.cost_usd, 6)
                 run.status = RunStatus.DONE.value
                 run.finished_at = utcnow()
                 session.add(run)
                 session.commit()
                 logger.info(
-                    "crawl %s done: seen=%s new=%s gone=%s haiku=%s cost=$%.4f",
-                    run_id, crawl.seen, crawl.new, gone, norm.haiku_calls, norm.cost_usd,
+                    "crawl %s done: seen=%s new=%s gone=%s haiku=%s sonnet=%s cost=$%.4f",
+                    run_id, crawl.seen, crawl.new, gone, norm.haiku_calls,
+                    ev.sonnet_calls, norm.cost_usd + ev.cost_usd,
                 )
             except Exception as exc:  # noqa: BLE001 — recorded on the run
                 logger.exception("crawl %s failed", run_id)

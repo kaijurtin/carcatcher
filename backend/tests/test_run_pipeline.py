@@ -8,6 +8,7 @@ import pytest
 from sqlmodel import Session, select
 
 from carcatcher.ai.client import AIClient
+from carcatcher.ai.evaluate import Evaluator
 from carcatcher.app_state import AppState, set_state
 from carcatcher.config import Settings
 from carcatcher.db.engine import get_engine
@@ -22,8 +23,14 @@ from tests.fakes import FakeFirecrawl
 def state():
     fc = FakeFirecrawl()
     scraper = KleinanzeigenScraper(fc)
-    extractor = Extractor(AIClient(Settings(ai_disabled=True)))  # no AI in this test
-    st = AppState(firecrawl=fc, scrapers={"kleinanzeigen": scraper}, extractor=extractor)
+    ai = AIClient(Settings(ai_disabled=True))  # no AI in this test
+    st = AppState(
+        firecrawl=fc,
+        scrapers={"kleinanzeigen": scraper},
+        ai=ai,
+        extractor=Extractor(ai),
+        evaluator=Evaluator(ai),
+    )
     set_state(st)
     yield st
     set_state(None)

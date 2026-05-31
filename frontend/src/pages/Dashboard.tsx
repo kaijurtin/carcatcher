@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useListings } from "../hooks/useListings";
 import { ListingsTable } from "../components/ListingsTable";
+import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
 import type { SortField } from "../types";
 
@@ -16,6 +17,7 @@ const DESC_SORTS: SortField[] = ["scraped_at", "year", "deal_score"];
 
 export function Dashboard() {
   const [sort, setSort] = useState<SortField>("scraped_at");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
   const { data, loading, error, reload } = useListings({ sort, order, page_size: 50 });
 
@@ -55,7 +57,14 @@ export function Dashboard() {
         </div>
       )}
       {loading && !data && <div className="text-slate-400">Loading…</div>}
-      {data && <ListingsTable items={data.items} />}
+      {data && <ListingsTable items={data.items} onSelect={setSelectedId} />}
+
+      {selectedId !== null && (
+        <ListingDetailDrawer
+          listingId={selectedId}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </section>
   );
 }

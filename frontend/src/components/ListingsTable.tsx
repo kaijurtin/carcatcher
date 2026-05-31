@@ -25,7 +25,13 @@ function specsLine(l: Listing): string {
   return parts.join(" · ");
 }
 
-export function ListingsTable({ items }: { items: Listing[] }) {
+export function ListingsTable({
+  items,
+  onSelect,
+}: {
+  items: Listing[];
+  onSelect?: (id: number) => void;
+}) {
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 p-12 text-center text-slate-500">
@@ -50,7 +56,11 @@ export function ListingsTable({ items }: { items: Listing[] }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.map((l) => (
-            <tr key={l.id} className="hover:bg-slate-50">
+            <tr
+              key={l.id}
+              onClick={() => onSelect?.(l.id)}
+              className={`hover:bg-slate-50 ${onSelect ? "cursor-pointer" : ""}`}
+            >
               <td className="max-w-md px-4 py-3">
                 <span className="line-clamp-1 font-medium text-slate-900">
                   {l.make && l.model ? `${l.make} ${l.model}` : l.raw_title}
@@ -84,6 +94,7 @@ export function ListingsTable({ items }: { items: Listing[] }) {
                   href={l.url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="text-sm font-medium text-sky-600 hover:text-sky-700"
                 >
                   View ↗

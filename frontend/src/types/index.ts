@@ -1,3 +1,12 @@
+export interface AiEvaluation {
+  summary: string;
+  pros?: string[];
+  cons?: string[];
+  red_flags?: string[];
+  deal_verdict: "good" | "fair" | "overpriced";
+  confidence: "low" | "medium" | "high";
+}
+
 export interface Listing {
   id: number;
   source: string;
@@ -25,7 +34,7 @@ export interface Listing {
   fair_price_estimate: number | null;
   deal_score: number | null;
   comp_count: number | null;
-  ai_evaluation: Record<string, unknown> | null;
+  ai_evaluation: AiEvaluation | null;
   ai_evaluated_at: string | null;
   first_seen_at: string;
   last_seen_at: string;
