@@ -24,6 +24,8 @@ class NormalizedListing(BaseModel):
     fuel: str | None = None
     transmission: str | None = None
     power_kw: int | None = None
+    battery_kwh: float | None = None
+    battery_soh_pct: int | None = None
     body_type: str | None = None
     location_city: str | None = None
     location_plz: str | None = None
@@ -43,6 +45,20 @@ class NormalizedListing(BaseModel):
     @classmethod
     def _v_seller(cls, v: str | None) -> str | None:
         return v if v in SELLER_TYPES else None
+
+    @field_validator("battery_kwh")
+    @classmethod
+    def _v_battery_kwh(cls, v: float | None) -> float | None:
+        if v is None:
+            return None
+        return v if 10 <= v <= 250 else None
+
+    @field_validator("battery_soh_pct")
+    @classmethod
+    def _v_soh(cls, v: int | None) -> int | None:
+        if v is None:
+            return None
+        return v if 0 <= v <= 100 else None
 
 
 def _str() -> dict:
