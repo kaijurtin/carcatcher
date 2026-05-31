@@ -1,9 +1,8 @@
 # CarCatcher stack: api (FastAPI) + ui (nginx/React) + self-hosted Firecrawl.
 #
-# Firecrawl self-hosting follows the upstream topology
-# (https://github.com/firecrawl/firecrawl/blob/main/SELF_HOST.md):
-#   firecrawl-redis + firecrawl-playwright + firecrawl-api + firecrawl-worker.
-# Pin FIRECRAWL_IMAGE / PLAYWRIGHT_IMAGE in .env to a known-good tag.
+# Firecrawl self-hosting (current "harness" image): the firecrawl container runs
+# the API + workers internally and needs Redis + a Postgres ("NUQ") + the Playwright
+# microservice. Pin FIRECRAWL_IMAGE / PLAYWRIGHT_IMAGE in .env to a known-good tag.
 
 services:
   api:
@@ -40,6 +39,23 @@ services:
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
 
+  firecrawl-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=firecrawl
+      - POSTGRES_PASSWORD=firecrawl
+      - POSTGRES_DB=nuq
+    volumes:
+      - firecrawl-pgdata:/var/lib/postgresql/data
+
+  firecrawl-rabbitmq:
+    image: rabbitmq:3.13
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=firecrawl
+      - RABBITMQ_DEFAULT_PASS=firecrawl
+
   firecrawl-playwright:
     image: ${PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
     restart: unless-stopped
@@ -52,25 +68,19 @@ services:
     environment:
       - REDIS_URL=redis://firecrawl-redis:6379
       - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
+      - NUQ_DATABASE_URL=postgresql://firecrawl:firecrawl@firecrawl-postgres:5432/nuq
+      - NUQ_RABBITMQ_URL=amqp://firecrawl:firecrawl@firecrawl-rabbitmq:5672
       - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
       - USE_DB_AUTHENTICATION=false
       - PORT=3002
       - HOST=0.0.0.0
     depends_on:
       - firecrawl-redis
+      - firecrawl-postgres
+      - firecrawl-rabbitmq
       - firecrawl-playwright
     expose:
       - "3002"
 
-  firecrawl-worker:
-    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
-    restart: unless-stopped
-    command: ["pnpm", "run", "workers"]
-    environment:
-      - REDIS_URL=redis://firecrawl-redis:6379
-      - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
-      - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
-      - USE_DB_AUTHENTICATION=false
-    depends_on:
-      - firecrawl-redis
-      - firecrawl-api
+volumes:
+  firecrawl-pgdata:

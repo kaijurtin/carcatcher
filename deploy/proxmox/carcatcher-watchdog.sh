@@ -5,10 +5,15 @@
 set -uo pipefail
 
 CTID="${CARCATCHER_CTID:-113}"            # CarCatcher LXC id — set in the unit env
-HEALTH_URL="${CARCATCHER_HEALTH_URL:-http://192.168.178.0:8080/api/health}"
+HEALTH_URL="${CARCATCHER_HEALTH_URL:-http://192.168.178.122:8080/api/health}"
 ALERT_EMAIL="${ALERT_EMAIL:-kai@jurtin.de}"
 RETRIES="${RETRIES:-3}"
 SLEEP_BETWEEN="${SLEEP_BETWEEN:-5}"
+
+# Safety: never act on an obviously-unconfigured placeholder URL.
+case "$HEALTH_URL" in
+  *192.168.178.0*|"") echo "[watchdog] refusing to run with placeholder HEALTH_URL" >&2; exit 0 ;;
+esac
 
 ok=0
 for _ in $(seq 1 "$RETRIES"); do
