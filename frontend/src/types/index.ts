@@ -66,6 +66,39 @@ export interface CrawlRun {
   error: string | null;
 }
 
+export interface StructuredFilters {
+  make?: string | null;
+  model?: string | null;
+  variant?: string | null;
+  year_min?: number | null;
+  year_max?: number | null;
+  price_min?: number | null;
+  price_max?: number | null;
+  mileage_max?: number | null;
+  fuel?: string | null;
+  transmission?: string | null;
+  seller_type?: string | null;
+  plz?: string | null;
+  keywords?: string | null;
+}
+
+export interface SavedSearch {
+  id: number;
+  name: string;
+  criteria: StructuredFilters;
+  nl_query: string | null;
+  auto_evaluate: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedSearchCreate {
+  name: string;
+  criteria: StructuredFilters;
+  nl_query?: string | null;
+  auto_evaluate?: boolean;
+}
+
 export interface NlSearchResponse {
   query: string;
   filters: Record<string, unknown>;

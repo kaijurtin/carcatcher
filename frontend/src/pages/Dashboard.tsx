@@ -5,8 +5,14 @@ import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
 import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
-import { nlSearch, recommend } from "../api/client";
-import type { Listing, NlSearchResponse, RecommendResponse, SortField } from "../types";
+import { createSavedSearch, nlSearch, recommend } from "../api/client";
+import type {
+  Listing,
+  NlSearchResponse,
+  RecommendResponse,
+  SortField,
+  StructuredFilters,
+} from "../types";
 
 const SORTS: { value: SortField; label: string }[] = [
   { value: "scraped_at", label: "Newest" },
@@ -40,6 +46,7 @@ export function Dashboard() {
   const [nl, setNl] = useState<NlSearchResponse | null>(null);
   const [nlLoading, setNlLoading] = useState(false);
   const [nlError, setNlError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   // Selection + recommendation
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -50,6 +57,7 @@ export function Dashboard() {
   const runNlSearch = useCallback(async (query: string) => {
     setNlLoading(true);
     setNlError(null);
+    setSaved(false);
     try {
       setNl(await nlSearch(query));
     } catch (e) {
@@ -80,6 +88,23 @@ export function Dashboard() {
     }
   }, [picked]);
 
+  const saveCurrentSearch = useCallback(async () => {
+    if (!nl) return;
+    const name = window.prompt("Name this saved search:", nl.query)?.trim();
+    if (!name) return;
+    try {
+      await createSavedSearch({
+        name,
+        criteria: nl.filters as StructuredFilters,
+        nl_query: nl.query,
+        auto_evaluate: true,
+      });
+      setSaved(true);
+    } catch {
+      /* surfaced elsewhere; keep the bar simple */
+    }
+  }, [nl]);
+
   const items: Listing[] = nl ? nl.results : (data?.items ?? []);
   const canRecommend = picked.size >= 2 && picked.size <= 8;
 
@@ -103,8 +128,17 @@ export function Dashboard() {
         </div>
       )}
       {nl && (
-        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
-          <span className="font-medium">Interpreted:</span> {nl.rationale}
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+          <span>
+            <span className="font-medium">Interpreted:</span> {nl.rationale}
+          </span>
+          <button
+            onClick={saveCurrentSearch}
+            disabled={saved}
+            className="shrink-0 rounded-md border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+          >
+            {saved ? "Saved ✓" : "Save this search"}
+          </button>
         </div>
       )}
 

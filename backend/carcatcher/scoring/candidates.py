@@ -12,7 +12,26 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from carcatcher.config import Settings
-from carcatcher.db.models import Listing, ListingStatus, ShortlistItem
+from carcatcher.db.models import Listing, ListingStatus, SavedSearch, ShortlistItem
+from carcatcher.queries import search_listings
+from carcatcher.schemas import StructuredFilters
+
+
+def _auto_evaluate_matches(session: Session, limit: int) -> list[Listing]:
+    """Active, not-yet-evaluated listings matching any auto_evaluate SavedSearch."""
+    searches = session.exec(
+        select(SavedSearch).where(SavedSearch.auto_evaluate == True)  # noqa: E712
+    ).all()
+    matches: list[Listing] = []
+    fields = StructuredFilters.model_fields
+    for ss in searches:
+        filters = StructuredFilters(
+            **{k: v for k, v in ss.criteria.items() if k in fields}
+        )
+        for li in search_listings(session, filters, limit=limit):
+            if li.ai_evaluated_at is None:
+                matches.append(li)
+    return matches
 
 
 def select_candidates(session: Session, settings: Settings) -> list[Listing]:
@@ -38,9 +57,11 @@ def select_candidates(session: Session, settings: Settings) -> list[Listing]:
         )
     ).all()
 
+    auto = _auto_evaluate_matches(session, settings.max_sonnet_evals_per_run)
+
     # Dedupe by id, keep highest deal_score first (None last), then cap.
     by_id: dict[int, Listing] = {}
-    for listing in [*deal_candidates, *shortlisted]:
+    for listing in [*deal_candidates, *shortlisted, *auto]:
         by_id[listing.id] = listing
     ranked = sorted(
         by_id.values(),

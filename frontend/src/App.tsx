@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { getHealth } from "./api/client";
 import { Dashboard } from "./pages/Dashboard";
+import { SavedSearches } from "./pages/SavedSearches";
 
 type HealthState = "checking" | "ok" | "down";
+type View = "dashboard" | "searches";
 
 export default function App() {
   const [health, setHealth] = useState<HealthState>("checking");
+  const [view, setView] = useState<View>("dashboard");
 
   useEffect(() => {
     let cancelled = false;
@@ -21,16 +24,33 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <h1 className="text-xl font-semibold tracking-tight">
-            🚗 CarCatcher
-          </h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-semibold tracking-tight">🚗 CarCatcher</h1>
+            <nav className="flex gap-1">
+              <NavTab label="Dashboard" active={view === "dashboard"} onClick={() => setView("dashboard")} />
+              <NavTab label="Saved searches" active={view === "searches"} onClick={() => setView("searches")} />
+            </nav>
+          </div>
           <HealthPill state={health} />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <Dashboard />
+        {view === "dashboard" ? <Dashboard /> : <SavedSearches />}
       </main>
     </div>
+  );
+}
+
+function NavTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+        active ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-800"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

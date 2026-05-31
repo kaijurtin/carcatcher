@@ -7,6 +7,8 @@ import type {
   Listing,
   NlSearchResponse,
   RecommendResponse,
+  SavedSearch,
+  SavedSearchCreate,
 } from "../types";
 
 const BASE = "/api";
@@ -88,6 +90,34 @@ export function nlSearch(query: string): Promise<NlSearchResponse> {
 
 export function recommend(listingIds: number[]): Promise<RecommendResponse> {
   return apiPost<RecommendResponse>("/recommend", { listing_ids: listingIds });
+}
+
+export function getSavedSearches(): Promise<SavedSearch[]> {
+  return apiGet<SavedSearch[]>("/saved-searches");
+}
+
+export function createSavedSearch(body: SavedSearchCreate): Promise<SavedSearch> {
+  return apiPost<SavedSearch>("/saved-searches", body);
+}
+
+export async function updateSavedSearch(
+  id: number,
+  body: Partial<SavedSearchCreate>,
+): Promise<SavedSearch> {
+  const resp = await fetch(`${BASE}/saved-searches/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new ApiError(resp.status, `update failed: ${resp.status}`);
+  return (await resp.json()) as SavedSearch;
+}
+
+export async function deleteSavedSearch(id: number): Promise<void> {
+  const resp = await fetch(`${BASE}/saved-searches/${id}`, { method: "DELETE" });
+  if (!resp.ok && resp.status !== 204) {
+    throw new ApiError(resp.status, `delete failed: ${resp.status}`);
+  }
 }
 
 export type RefreshResult = "scheduled" | "running" | "unauthorized" | "error";
