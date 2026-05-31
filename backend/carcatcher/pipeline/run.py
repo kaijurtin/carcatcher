@@ -17,6 +17,7 @@ from carcatcher.db.engine import get_engine
 from carcatcher.db.models import (
     CrawlRun,
     Listing,
+    ListingSearch,
     ListingStatus,
     RunStatus,
     SavedSearch,
@@ -59,8 +60,8 @@ def _apply_stub(listing: Listing, scraper: Scraper, stub: ListingStub) -> None:
         listing.normalized_at = utcnow()
 
 
-def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
-    """Insert or update a Listing for `stub`. Returns "new" or "updated"."""
+def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> tuple[Listing, str]:
+    """Insert or update a Listing for `stub`. Returns (listing, "new"|"updated")."""
     existing = session.exec(
         select(Listing).where(
             Listing.source == stub.source, Listing.source_id == stub.source_id
@@ -72,7 +73,8 @@ def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
         _apply_stub(listing, scraper, stub)
         session.add(listing)
         session.commit()
-        return "new"
+        session.refresh(listing)
+        return listing, "new"
 
     old_hash = existing.raw_html_hash
     _apply_stub(existing, scraper, stub)
@@ -87,7 +89,24 @@ def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
             existing.normalized_at = None
     session.add(existing)
     session.commit()
-    return "updated"
+    return existing, "updated"
+
+
+def upsert_listing_search(session: Session, search_id: int, listing_id: int) -> None:
+    """Tag a listing as belonging to a search (active + seen now)."""
+    link = session.exec(
+        select(ListingSearch).where(
+            ListingSearch.search_id == search_id,
+            ListingSearch.listing_id == listing_id,
+        )
+    ).first()
+    now = utcnow()
+    if link is None:
+        link = ListingSearch(search_id=search_id, listing_id=listing_id)
+    link.status = ListingStatus.ACTIVE.value
+    link.last_seen_at = now
+    session.add(link)
+    session.commit()
 
 
 async def crawl_source(
@@ -100,7 +119,7 @@ async def crawl_source(
     """Run one source's search and upsert every stub. Returns crawl counts."""
     stats = CrawlStats()
     async for stub in scraper.search(filters, max_pages=max_pages):
-        outcome = upsert_stub(session, scraper, stub)
+        _, outcome = upsert_stub(session, scraper, stub)
         stats.seen += 1
         if outcome == "new":
             stats.new += 1
@@ -114,37 +133,60 @@ def _filters_from_criteria(criteria: dict) -> StructuredFilters:
     return StructuredFilters(**{k: v for k, v in criteria.items() if k in fields})
 
 
-def build_searches(session: Session) -> list[StructuredFilters]:
-    """The searches a crawl runs: every SavedSearch plus a default broad sweep."""
-    searches = [StructuredFilters()]  # broad "all autos" baseline
-    for ss in session.exec(select(SavedSearch)).all():
-        searches.append(_filters_from_criteria(ss.criteria))
-    return searches
-
-
-async def run_all_sources(*, trigger: str = "scheduled") -> list[int]:
-    """Run the pipeline for every configured source sequentially. Returns run ids."""
-    ids: list[int] = []
-    for source in get_settings().crawl_sources_list:
+async def crawl_search(session: Session, search: SavedSearch, state, settings) -> CrawlStats:
+    """Crawl every source with one search's filters, tagging each listing with it."""
+    filters = _filters_from_criteria(search.criteria)
+    stats = CrawlStats()
+    for name, scraper in state.scrapers.items():
         try:
-            run_id = await run_pipeline(source=source, trigger=trigger)
-        except Exception:  # noqa: BLE001 — one source failing shouldn't stop the rest
-            logger.exception("source %s failed during multi-source crawl", source)
+            async for stub in scraper.search(filters, max_pages=settings.search_max_pages):
+                listing, outcome = upsert_stub(session, scraper, stub)
+                upsert_listing_search(session, search.id, listing.id)
+                stats.seen += 1
+                if outcome == "new":
+                    stats.new += 1
+                else:
+                    stats.updated += 1
+        except Exception:  # noqa: BLE001 — one source failing shouldn't stop the search
+            logger.exception("source %s failed for search %s", name, search.name)
+    return stats
+
+
+async def run_all_enabled(*, trigger: str = "scheduled") -> list[int]:
+    """Run the full pipeline for every enabled saved search. Returns run ids."""
+    with Session(get_engine()) as session:
+        ids = [
+            s.id
+            for s in session.exec(
+                select(SavedSearch).where(SavedSearch.enabled == True)  # noqa: E712
+            ).all()
+        ]
+    out: list[int] = []
+    for sid in ids:
+        try:
+            run_id = await run_search(sid, trigger=trigger)
+        except Exception:  # noqa: BLE001 — one search failing shouldn't stop the rest
+            logger.exception("search %s failed during scheduled crawl", sid)
             continue
         if run_id is not None:
-            ids.append(run_id)
-    return ids
+            out.append(run_id)
+    return out
 
 
-async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "scheduled") -> int | None:
-    """Full crawl run: crawl -> normalize -> mark-gone -> prune, under a lock,
-    recorded in a CrawlRun. Returns the run id, or None if a crawl is already
-    in flight. Imports are local to avoid an app_state import cycle."""
+async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | None:
+    """Full per-search pipeline: crawl (all sources, tagged) -> mark-gone (this search)
+    -> recompute status -> normalize -> score -> evaluate -> prune, under a lock,
+    recorded in a CrawlRun. Returns the run id, or None if skipped."""
     from carcatcher.app_state import get_state
     from carcatcher.pipeline.evaluate import evaluate_candidates
     from carcatcher.pipeline.normalize import normalize_pending
     from carcatcher.pipeline.score import score_active
-    from carcatcher.pipeline.snapshot import mark_gone, prune_gone, reclaim_stale_runs
+    from carcatcher.pipeline.snapshot import (
+        mark_gone_for_search,
+        prune,
+        recompute_listing_status,
+        reclaim_stale_runs,
+    )
 
     settings = get_settings()
     state = get_state()
@@ -156,7 +198,15 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
     async with state.crawl_lock:
         with Session(get_engine()) as session:
             reclaim_stale_runs(session, settings.run_timeout_minutes)
-            run = CrawlRun(source=source, trigger=trigger, status=RunStatus.RUNNING.value)
+            search = session.get(SavedSearch, search_id)
+            if search is None:
+                return None
+            run = CrawlRun(
+                source=search.name,
+                search_id=search_id,
+                trigger=trigger,
+                status=RunStatus.RUNNING.value,
+            )
             session.add(run)
             session.commit()
             session.refresh(run)
@@ -164,21 +214,13 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
             started = run.started_at
 
             try:
-                scraper = state.scrapers[source]
-                crawl = CrawlStats()
-                for filters in build_searches(session):
-                    s = await crawl_source(
-                        session, scraper, filters, max_pages=settings.search_max_pages
-                    )
-                    crawl.seen += s.seen
-                    crawl.new += s.new
-                    crawl.updated += s.updated
-
-                norm = await normalize_pending(session, state.extractor, source=source)
-                gone = mark_gone(session, source, started)
-                score_active(session, source=source)
+                crawl = await crawl_search(session, search, state, settings)
+                gone = mark_gone_for_search(session, search_id, started)
+                recompute_listing_status(session)
+                norm = await normalize_pending(session, state.extractor)
+                score_active(session)
                 ev = await evaluate_candidates(session, state.evaluator)
-                prune_gone(session, settings.prune_gone_days)
+                prune(session, settings.prune_gone_days)
 
                 run = session.get(CrawlRun, run_id)
                 run.listings_seen = crawl.seen
@@ -193,12 +235,12 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
                 session.add(run)
                 session.commit()
                 logger.info(
-                    "crawl %s done: seen=%s new=%s gone=%s haiku=%s sonnet=%s cost=$%.4f",
-                    run_id, crawl.seen, crawl.new, gone, norm.haiku_calls,
-                    ev.sonnet_calls, norm.cost_usd + ev.cost_usd,
+                    "search '%s' run %s done: seen=%s new=%s gone=%s haiku=%s sonnet=%s cost=$%.4f",
+                    search.name, run_id, crawl.seen, crawl.new, gone,
+                    norm.haiku_calls, ev.sonnet_calls, norm.cost_usd + ev.cost_usd,
                 )
             except Exception as exc:  # noqa: BLE001 — recorded on the run
-                logger.exception("crawl %s failed", run_id)
+                logger.exception("search run %s failed", run_id)
                 run = session.get(CrawlRun, run_id)
                 run.status = RunStatus.FAILED.value
                 run.error = str(exc)[:500]

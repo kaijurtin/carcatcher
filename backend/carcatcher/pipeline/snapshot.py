@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from carcatcher.db.models import (
     CrawlRun,
     Listing,
+    ListingSearch,
     ListingStatus,
     RunStatus,
     ShortlistItem,
@@ -23,33 +24,66 @@ from carcatcher.db.models import (
 )
 
 
-def mark_gone(session: Session, source: str, run_started_at: datetime) -> int:
-    """Mark active listings of `source` not seen since `run_started_at` as gone.
-    Call ONLY after a successful full crawl of that source."""
+def mark_gone_for_search(
+    session: Session, search_id: int, run_started_at: datetime
+) -> int:
+    """Mark this search's links not seen since `run_started_at` as gone. Per-search,
+    so one search's crawl never affects another search's listings."""
     stale = session.exec(
-        select(Listing).where(
-            Listing.source == source,
-            Listing.status == ListingStatus.ACTIVE.value,
-            Listing.last_seen_at < run_started_at,
+        select(ListingSearch).where(
+            ListingSearch.search_id == search_id,
+            ListingSearch.status == ListingStatus.ACTIVE.value,
+            ListingSearch.last_seen_at < run_started_at,
         )
     ).all()
-    for listing in stale:
-        listing.status = ListingStatus.GONE.value
-        session.add(listing)
+    for link in stale:
+        link.status = ListingStatus.GONE.value
+        session.add(link)
     session.commit()
     return len(stale)
 
 
-def prune_gone(session: Session, prune_gone_days: int) -> int:
-    """Delete `gone` listings older than the cutoff that no ShortlistItem references."""
+def recompute_listing_status(session: Session) -> None:
+    """A Listing is active iff at least one of its search links is active."""
+    active_ids = {
+        row
+        for row in session.exec(
+            select(ListingSearch.listing_id).where(
+                ListingSearch.status == ListingStatus.ACTIVE.value
+            )
+        ).all()
+    }
+    for listing in session.exec(select(Listing)).all():
+        listing.status = (
+            ListingStatus.ACTIVE.value
+            if listing.id in active_ids
+            else ListingStatus.GONE.value
+        )
+        session.add(listing)
+    session.commit()
+
+
+def prune(session: Session, prune_gone_days: int) -> int:
+    """Delete gone links older than the cutoff, then delete orphan Listings (no links)
+    that no ShortlistItem references. Shortlisted listings always survive."""
     cutoff = utcnow() - timedelta(days=prune_gone_days)
-    referenced = select(ShortlistItem.listing_id)
+    session.exec(  # type: ignore[call-overload]
+        delete(ListingSearch)
+        .where(
+            ListingSearch.status == ListingStatus.GONE.value,
+            ListingSearch.last_seen_at < cutoff,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    session.commit()
+
+    linked = select(ListingSearch.listing_id).distinct()
+    shortlisted = select(ShortlistItem.listing_id)
     result = session.exec(  # type: ignore[call-overload]
         delete(Listing)
         .where(
-            Listing.status == ListingStatus.GONE.value,
-            Listing.last_seen_at < cutoff,
-            Listing.id.not_in(referenced),  # type: ignore[union-attr]
+            Listing.id.not_in(linked),  # type: ignore[union-attr]
+            Listing.id.not_in(shortlisted),  # type: ignore[union-attr]
         )
         .execution_options(synchronize_session=False)
     )

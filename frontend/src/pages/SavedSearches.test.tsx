@@ -11,6 +11,7 @@ const existing: SavedSearch = {
   criteria: { make: "Volkswagen", model: "Golf", price_max: 15000 },
   nl_query: null,
   auto_evaluate: true,
+  enabled: true,
   created_at: "2026-05-31T00:00:00Z",
   updated_at: "2026-05-31T00:00:00Z",
 };
@@ -25,6 +26,12 @@ function mockApi(list: SavedSearch[]) {
     if (url.endsWith("/api/saved-searches") && method === "POST") {
       return new Response(JSON.stringify({ ...existing, id: 2 }), { status: 201 });
     }
+    if (url.includes("/run") && method === "POST") {
+      return new Response(JSON.stringify({ status: "scheduled" }), { status: 202 });
+    }
+    if (method === "PUT") {
+      return new Response(JSON.stringify({ ...existing }), { status: 200 });
+    }
     return new Response("{}", { status: 200 });
   });
 }
@@ -34,6 +41,25 @@ test("lists existing saved searches with criteria summary", async () => {
   render(<SavedSearches />);
   await waitFor(() => expect(screen.getByText("VW Golf budget")).toBeInTheDocument());
   expect(screen.getByText(/Volkswagen Golf/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Run now/ })).toBeInTheDocument();
+});
+
+test("Run now posts to the run endpoint with the stored secret", async () => {
+  const fetchSpy = mockApi([existing]);
+  localStorage.setItem("carcatcher_cron_secret", "s3cr3t");
+  render(<SavedSearches />);
+  await waitFor(() => screen.getByRole("button", { name: /Run now/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Run now/ }));
+  await waitFor(() =>
+    expect(
+      fetchSpy.mock.calls.some(
+        ([u, i]) =>
+          String(u).includes("/run") &&
+          (i?.headers as Record<string, string>)?.["X-Cron-Secret"] === "s3cr3t",
+      ),
+    ).toBe(true),
+  );
+  localStorage.removeItem("carcatcher_cron_secret");
 });
 
 test("shows empty state when there are none", async () => {

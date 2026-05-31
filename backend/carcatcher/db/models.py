@@ -126,8 +126,28 @@ class SavedSearch(SQLModel, table=True):
     criteria: dict = Field(default_factory=dict, sa_column=Column(JSON))
     nl_query: str | None = None
     auto_evaluate: bool = False
+    enabled: bool = True  # whether it runs on the scheduled crawl
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# ListingSearch — many-to-many link tagging a listing with the search(es) that
+# found it, with a per-search snapshot status (so one search's crawl never
+# marks another search's listings gone).
+# --------------------------------------------------------------------------- #
+class ListingSearch(SQLModel, table=True):
+    __tablename__ = "listing_search"
+    __table_args__ = (
+        UniqueConstraint("search_id", "listing_id", name="uq_listing_search"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    search_id: int = Field(foreign_key="saved_search.id", index=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    status: str = Field(default=ListingStatus.ACTIVE.value, index=True)
+    first_seen_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow, index=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -161,7 +181,8 @@ class CrawlRun(SQLModel, table=True):
     __tablename__ = "crawl_run"
 
     id: int | None = Field(default=None, primary_key=True)
-    source: str
+    source: str  # display label — set to the search name
+    search_id: int | None = Field(default=None, index=True)
     trigger: str = "scheduled"  # scheduled / manual
     status: str = Field(default=RunStatus.RUNNING.value, index=True)
     started_at: datetime = Field(default_factory=utcnow)

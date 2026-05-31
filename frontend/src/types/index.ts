@@ -88,6 +88,7 @@ export interface SavedSearch {
   criteria: StructuredFilters;
   nl_query: string | null;
   auto_evaluate: boolean;
+  enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +98,7 @@ export interface SavedSearchCreate {
   criteria: StructuredFilters;
   nl_query?: string | null;
   auto_evaluate?: boolean;
+  enabled?: boolean;
 }
 
 export interface NlSearchResponse {
@@ -124,6 +126,7 @@ export type SortField = "scraped_at" | "price" | "deal_score" | "year" | "mileag
 
 export interface ListingQuery {
   source?: string;
+  search_id?: number;
   make?: string;
   model?: string;
   price_max?: number;

@@ -30,7 +30,7 @@ def test_refresh_202_schedules(client, monkeypatch):
     async def fake_run_all(**kwargs):
         called.update(kwargs)
 
-    monkeypatch.setattr(refresh_mod, "run_all_sources", fake_run_all)
+    monkeypatch.setattr(refresh_mod, "run_all_enabled", fake_run_all)
     resp = client.post("/api/refresh", headers={"X-Cron-Secret": "test-secret"})
     assert resp.status_code == 202
     assert resp.json()["status"] == "scheduled"

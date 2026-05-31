@@ -1,15 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useListings } from "../hooks/useListings";
 import { ListingsTable } from "../components/ListingsTable";
 import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
 import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
-import { createSavedSearch, nlSearch, recommend } from "../api/client";
+import { createSavedSearch, getSavedSearches, nlSearch, recommend } from "../api/client";
 import type {
   Listing,
   NlSearchResponse,
   RecommendResponse,
+  SavedSearch,
   SortField,
   StructuredFilters,
 } from "../types";
@@ -34,11 +35,20 @@ export function Dashboard() {
   const [sort, setSort] = useState<SortField>("scraped_at");
   const [source, setSource] = useState<string>("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  // Search tabs ("All" = undefined search_id, else a saved search id)
+  const [searches, setSearches] = useState<SavedSearch[]>([]);
+  const [activeSearch, setActiveSearch] = useState<number | "all">("all");
+  useEffect(() => {
+    getSavedSearches().then(setSearches).catch(() => setSearches([]));
+  }, []);
+
   const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
   const { data, loading, error, reload } = useListings({
     sort,
     order,
     source: source || undefined,
+    search_id: activeSearch === "all" ? undefined : activeSearch,
     page_size: 50,
   });
 
@@ -121,6 +131,20 @@ export function Dashboard() {
           active={nl !== null}
         />
       </div>
+
+      {!nl && searches.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+          <SearchTab label="All" active={activeSearch === "all"} onClick={() => setActiveSearch("all")} />
+          {searches.map((s) => (
+            <SearchTab
+              key={s.id}
+              label={s.name}
+              active={activeSearch === s.id}
+              onClick={() => setActiveSearch(s.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {nlError && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
@@ -227,5 +251,28 @@ export function Dashboard() {
         />
       )}
     </section>
+  );
+}
+
+function SearchTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+        active
+          ? "border-sky-600 text-sky-700"
+          : "border-transparent text-slate-500 hover:text-slate-800"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

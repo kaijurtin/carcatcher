@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 from carcatcher.config import get_settings
 from carcatcher.db.engine import get_engine, get_session
 from carcatcher.db.models import CrawlRun
-from carcatcher.pipeline.run import run_all_sources
+from carcatcher.pipeline.run import run_all_enabled
 from carcatcher.pipeline.snapshot import is_crawl_running
 
 router = APIRouter()
@@ -51,8 +51,8 @@ async def refresh(x_cron_secret: str | None = Header(default=None)) -> JSONRespo
         if is_crawl_running(session):
             raise HTTPException(status_code=409, detail="a crawl is already running")
 
-    # Fire-and-forget; each source run holds its own lock and records a CrawlRun.
-    asyncio.create_task(run_all_sources(trigger="manual"))
+    # Fire-and-forget; each search run holds its own lock and records a CrawlRun.
+    asyncio.create_task(run_all_enabled(trigger="manual"))
     return JSONResponse(status_code=202, content={"status": "scheduled"})
 
 

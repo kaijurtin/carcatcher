@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRuns, triggerRefresh } from "../api/client";
 import type { CrawlRun } from "../types";
+import { clearSecret, ensureSecret } from "../lib/secret";
 import { RunStatusPill } from "./RunStatusPill";
 
-const SECRET_KEY = "carcatcher_cron_secret";
 const POLL_MS = 3000;
 
 export function RefreshControls({ onComplete }: { onComplete?: () => void }) {
@@ -49,17 +49,13 @@ export function RefreshControls({ onComplete }: { onComplete?: () => void }) {
   }, [onComplete]);
 
   const onClick = async () => {
-    let secret = localStorage.getItem(SECRET_KEY);
-    if (!secret) {
-      secret = window.prompt("Enter your refresh secret (CRON_SECRET):") ?? "";
-      if (!secret) return;
-      localStorage.setItem(SECRET_KEY, secret);
-    }
+    const secret = ensureSecret();
+    if (!secret) return;
     setMessage(null);
     setBusy(true);
     const result = await triggerRefresh(secret);
     if (result === "unauthorized") {
-      localStorage.removeItem(SECRET_KEY);
+      clearSecret();
       setBusy(false);
       setMessage("Wrong secret — click again to re-enter.");
       return;

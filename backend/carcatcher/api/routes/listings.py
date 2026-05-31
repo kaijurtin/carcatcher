@@ -11,7 +11,7 @@ from sqlalchemy import asc, desc
 from sqlmodel import Session, func, select
 
 from carcatcher.db.engine import get_session
-from carcatcher.db.models import Listing, ListingStatus
+from carcatcher.db.models import Listing, ListingSearch, ListingStatus
 
 router = APIRouter()
 
@@ -74,6 +74,7 @@ _SORT_COLUMNS = {
 def list_listings(
     session: Session = Depends(get_session),
     source: str | None = None,
+    search_id: int | None = None,
     status: str = ListingStatus.ACTIVE.value,
     make: str | None = None,
     model: str | None = None,
@@ -94,6 +95,12 @@ def list_listings(
     conditions = []
     if status != "all":
         conditions.append(Listing.status == status)
+    if search_id is not None:
+        active_for_search = select(ListingSearch.listing_id).where(
+            ListingSearch.search_id == search_id,
+            ListingSearch.status == ListingStatus.ACTIVE.value,
+        )
+        conditions.append(Listing.id.in_(active_for_search))  # type: ignore[union-attr]
     if source:
         conditions.append(Listing.source == source)
     if make:

@@ -3,8 +3,10 @@ import {
   createSavedSearch,
   deleteSavedSearch,
   getSavedSearches,
+  runSavedSearch,
   updateSavedSearch,
 } from "../api/client";
+import { clearSecret, ensureSecret } from "../lib/secret";
 import type { SavedSearch, StructuredFilters } from "../types";
 
 const EMPTY = {
@@ -80,8 +82,44 @@ export function SavedSearches() {
     await load();
   };
 
-  const remove = async (id: number) => {
-    await deleteSavedSearch(id);
+  const toggleEnabled = async (s: SavedSearch) => {
+    await updateSavedSearch(s.id, { enabled: !s.enabled });
+    await load();
+  };
+
+  const [running, setRunning] = useState<Set<number>>(new Set());
+  const runNow = async (s: SavedSearch) => {
+    const secret = ensureSecret();
+    if (!secret) return;
+    setError(null);
+    const result = await runSavedSearch(s.id, secret);
+    if (result === "unauthorized") {
+      clearSecret();
+      setError("Wrong secret — click Run again to re-enter.");
+      return;
+    }
+    if (result === "running") {
+      setError("A crawl is already running — try again shortly.");
+      return;
+    }
+    if (result === "error") {
+      setError("Could not start the run.");
+      return;
+    }
+    setRunning((prev) => new Set(prev).add(s.id));
+    setTimeout(() => {
+      setRunning((prev) => {
+        const next = new Set(prev);
+        next.delete(s.id);
+        return next;
+      });
+      load();
+    }, 8000);
+  };
+
+  const remove = async (s: SavedSearch) => {
+    if (!window.confirm(`Delete "${s.name}" and its results?`)) return;
+    await deleteSavedSearch(s.id);
     await load();
   };
 
@@ -142,6 +180,15 @@ export function SavedSearches() {
                 <label className="flex items-center gap-1.5 text-xs text-slate-500">
                   <input
                     type="checkbox"
+                    checked={s.enabled}
+                    onChange={() => toggleEnabled(s)}
+                    className="h-3.5 w-3.5 accent-sky-600"
+                  />
+                  scheduled
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
                     checked={s.auto_evaluate}
                     onChange={() => toggleAuto(s)}
                     className="h-3.5 w-3.5 accent-violet-600"
@@ -149,7 +196,14 @@ export function SavedSearches() {
                   auto-eval
                 </label>
                 <button
-                  onClick={() => remove(s.id)}
+                  onClick={() => runNow(s)}
+                  disabled={running.has(s.id)}
+                  className="rounded-md bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-700 disabled:bg-slate-300"
+                >
+                  {running.has(s.id) ? "Running…" : "Run now"}
+                </button>
+                <button
+                  onClick={() => remove(s)}
                   className="text-xs font-medium text-rose-600 hover:text-rose-700"
                 >
                   Delete

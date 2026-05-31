@@ -120,6 +120,20 @@ export async function deleteSavedSearch(id: number): Promise<void> {
   }
 }
 
+export async function runSavedSearch(
+  id: number,
+  secret: string,
+): Promise<RefreshResult> {
+  const resp = await fetch(`${BASE}/saved-searches/${id}/run`, {
+    method: "POST",
+    headers: { "X-Cron-Secret": secret },
+  });
+  if (resp.status === 202) return "scheduled";
+  if (resp.status === 409) return "running";
+  if (resp.status === 401) return "unauthorized";
+  return "error";
+}
+
 export type RefreshResult = "scheduled" | "running" | "unauthorized" | "error";
 
 export async function triggerRefresh(secret: string): Promise<RefreshResult> {

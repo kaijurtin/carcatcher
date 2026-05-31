@@ -1,17 +1,29 @@
-"""Saved-search CRUD. Saved searches drive focused crawls (build_searches) and,
-when auto_evaluate is on, force Sonnet evaluation of their matches."""
+"""Saved-search CRUD + on-demand run. Saved searches drive focused crawls and tag
+their results; auto_evaluate forces Sonnet evaluation of their matches."""
 
 from __future__ import annotations
 
+import asyncio
+import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import desc
+from sqlalchemy import delete, desc
 from sqlmodel import Session, select
 
-from carcatcher.db.engine import get_session
-from carcatcher.db.models import SavedSearch, utcnow
+from carcatcher.config import get_settings
+from carcatcher.db.engine import get_engine, get_session
+from carcatcher.db.models import (
+    Listing,
+    ListingSearch,
+    SavedSearch,
+    ShortlistItem,
+    utcnow,
+)
+from carcatcher.pipeline.run import run_search
+from carcatcher.pipeline.snapshot import is_crawl_running
 from carcatcher.schemas import StructuredFilters
 
 router = APIRouter()
@@ -22,6 +34,7 @@ class SavedSearchCreate(BaseModel):
     criteria: StructuredFilters = StructuredFilters()
     nl_query: str | None = None
     auto_evaluate: bool = False
+    enabled: bool = True
 
 
 class SavedSearchUpdate(BaseModel):
@@ -29,6 +42,7 @@ class SavedSearchUpdate(BaseModel):
     criteria: StructuredFilters | None = None
     nl_query: str | None = None
     auto_evaluate: bool | None = None
+    enabled: bool | None = None
 
 
 class SavedSearchRead(BaseModel):
@@ -39,6 +53,7 @@ class SavedSearchRead(BaseModel):
     criteria: dict
     nl_query: str | None
     auto_evaluate: bool
+    enabled: bool
     created_at: datetime
     updated_at: datetime
 
@@ -58,6 +73,7 @@ def create_saved_search(
         criteria=body.criteria.model_dump(exclude_none=True),
         nl_query=body.nl_query,
         auto_evaluate=body.auto_evaluate,
+        enabled=body.enabled,
     )
     session.add(ss)
     session.commit()
@@ -90,6 +106,8 @@ def update_saved_search(
         ss.nl_query = body.nl_query
     if body.auto_evaluate is not None:
         ss.auto_evaluate = body.auto_evaluate
+    if body.enabled is not None:
+        ss.enabled = body.enabled
     ss.updated_at = utcnow()
     session.add(ss)
     session.commit()
@@ -99,8 +117,48 @@ def update_saved_search(
 
 @router.delete("/saved-searches/{search_id}", status_code=204)
 def delete_saved_search(search_id: int, session: Session = Depends(get_session)) -> None:
+    """Delete a search and its tagged results (orphan listings, unless shortlisted)."""
     ss = session.get(SavedSearch, search_id)
     if ss is None:
         raise HTTPException(status_code=404, detail="saved search not found")
+
+    # Drop this search's links, then delete listings no longer tagged by any search
+    # (and not shortlisted).
+    session.exec(  # type: ignore[call-overload]
+        delete(ListingSearch)
+        .where(ListingSearch.search_id == search_id)
+        .execution_options(synchronize_session=False)
+    )
+    session.commit()
+    linked = select(ListingSearch.listing_id).distinct()
+    shortlisted = select(ShortlistItem.listing_id)
+    session.exec(  # type: ignore[call-overload]
+        delete(Listing)
+        .where(
+            Listing.id.not_in(linked),  # type: ignore[union-attr]
+            Listing.id.not_in(shortlisted),  # type: ignore[union-attr]
+        )
+        .execution_options(synchronize_session=False)
+    )
     session.delete(ss)
     session.commit()
+
+
+@router.post("/saved-searches/{search_id}/run")
+async def run_saved_search(
+    search_id: int,
+    x_cron_secret: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Trigger an on-demand crawl of one saved search (reuses CRON_SECRET)."""
+    settings = get_settings()
+    if not x_cron_secret or not secrets.compare_digest(x_cron_secret, settings.cron_secret):
+        raise HTTPException(status_code=401, detail="invalid or missing cron secret")
+    if session.get(SavedSearch, search_id) is None:
+        raise HTTPException(status_code=404, detail="saved search not found")
+    with Session(get_engine()) as s:
+        if is_crawl_running(s):
+            raise HTTPException(status_code=409, detail="a crawl is already running")
+
+    asyncio.create_task(run_search(search_id, trigger="manual"))
+    return JSONResponse(status_code=202, content={"status": "scheduled"})

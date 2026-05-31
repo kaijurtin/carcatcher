@@ -20,7 +20,10 @@ from carcatcher.schemas import StructuredFilters
 def _auto_evaluate_matches(session: Session, limit: int) -> list[Listing]:
     """Active, not-yet-evaluated listings matching any auto_evaluate SavedSearch."""
     searches = session.exec(
-        select(SavedSearch).where(SavedSearch.auto_evaluate == True)  # noqa: E712
+        select(SavedSearch).where(
+            SavedSearch.auto_evaluate == True,  # noqa: E712
+            SavedSearch.enabled == True,  # noqa: E712
+        )
     ).all()
     matches: list[Listing] = []
     fields = StructuredFilters.model_fields

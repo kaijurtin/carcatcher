@@ -7,7 +7,7 @@ from typing import Literal
 from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
-from carcatcher.db.models import Listing, ListingStatus
+from carcatcher.db.models import Listing, ListingSearch, ListingStatus
 from carcatcher.schemas import StructuredFilters
 
 _SORT_COLUMNS = {
@@ -26,9 +26,17 @@ def search_listings(
     sort: str = "deal_score",
     order: Literal["asc", "desc"] = "desc",
     limit: int = 50,
+    search_id: int | None = None,
 ) -> list[Listing]:
-    """Active listings matching the structured filters, sorted (NULLs last)."""
+    """Active listings matching the structured filters, sorted (NULLs last).
+    If `search_id` is given, restrict to listings tagged active for that search."""
     conditions = [Listing.status == ListingStatus.ACTIVE.value]
+    if search_id is not None:
+        active_for_search = select(ListingSearch.listing_id).where(
+            ListingSearch.search_id == search_id,
+            ListingSearch.status == ListingStatus.ACTIVE.value,
+        )
+        conditions.append(Listing.id.in_(active_for_search))  # type: ignore[union-attr]
     if filters.make:
         conditions.append(Listing.make.ilike(filters.make))  # type: ignore[union-attr]
     if filters.model:

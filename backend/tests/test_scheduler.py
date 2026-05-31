@@ -21,7 +21,7 @@ async def test_scheduled_crawl_invokes_all_sources(monkeypatch):
     async def fake_run_all(**kwargs):
         called.update(kwargs)
 
-    monkeypatch.setattr(jobs, "run_all_sources", fake_run_all)
+    monkeypatch.setattr(jobs, "run_all_enabled",fake_run_all)
     await jobs.scheduled_crawl()
     assert called == {"trigger": "scheduled"}
 
@@ -30,6 +30,6 @@ async def test_scheduled_crawl_swallows_errors(monkeypatch):
     async def boom(**kwargs):
         raise RuntimeError("pipeline down")
 
-    monkeypatch.setattr(jobs, "run_all_sources", boom)
+    monkeypatch.setattr(jobs, "run_all_enabled",boom)
     # Should not raise — errors are logged inside scheduled_crawl.
     await jobs.scheduled_crawl()
