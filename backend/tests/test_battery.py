@@ -26,3 +26,12 @@ def test_battery_fields_default_none():
     norm = NormalizedListing()
     assert norm.battery_kwh is None
     assert norm.battery_soh_pct is None
+
+
+def test_battery_bounds_are_inclusive():
+    # Confirms the validators use inclusive (<=) bounds at the edges.
+    assert NormalizedListing(battery_kwh=10.0).battery_kwh == 10.0
+    assert NormalizedListing(battery_kwh=250.0).battery_kwh == 250.0
+    assert NormalizedListing(battery_kwh=9.9).battery_kwh is None
+    assert NormalizedListing(battery_soh_pct=0).battery_soh_pct == 0
+    assert NormalizedListing(battery_soh_pct=100).battery_soh_pct == 100
