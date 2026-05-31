@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getHealth } from "./api/client";
+import { Dashboard } from "./pages/Dashboard";
 
 type HealthState = "checking" | "ok" | "down";
 
@@ -26,11 +27,8 @@ export default function App() {
           <HealthPill state={health} />
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-16">
-        <p className="text-slate-500">
-          The hunt begins here. Listings, comparisons, and deal scores will appear
-          on this dashboard.
-        </p>
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <Dashboard />
       </main>
     </div>
   );

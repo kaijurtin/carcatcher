@@ -1,0 +1,55 @@
+export interface Listing {
+  id: number;
+  source: string;
+  source_id: string;
+  url: string;
+  status: string;
+  raw_title: string;
+  raw_price: string | null;
+  location_raw: string | null;
+  images: string[];
+  price: number | null;
+  price_negotiable: boolean;
+  mileage_km: number | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  variant: string | null;
+  fuel: string | null;
+  transmission: string | null;
+  power_kw: number | null;
+  body_type: string | null;
+  location_city: string | null;
+  location_plz: string | null;
+  seller_type: string | null;
+  fair_price_estimate: number | null;
+  deal_score: number | null;
+  comp_count: number | null;
+  ai_evaluation: Record<string, unknown> | null;
+  ai_evaluated_at: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  scraped_at: string;
+}
+
+export interface ListingsPage {
+  items: Listing[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export type SortField = "scraped_at" | "price" | "deal_score" | "year" | "mileage_km";
+
+export interface ListingQuery {
+  source?: string;
+  make?: string;
+  model?: string;
+  price_max?: number;
+  mileage_max?: number;
+  year_min?: number;
+  sort?: SortField;
+  order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+}
