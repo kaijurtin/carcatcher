@@ -1,6 +1,29 @@
 import type { Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
 
+const FUEL_LABEL: Record<string, string> = {
+  petrol: "Benzin",
+  diesel: "Diesel",
+  hybrid: "Hybrid",
+  electric: "Elektro",
+  lpg: "LPG",
+  cng: "CNG",
+};
+
+function specsLine(l: Listing): string {
+  const parts = [
+    l.variant,
+    l.fuel ? (FUEL_LABEL[l.fuel] ?? l.fuel) : null,
+    l.transmission === "automatic"
+      ? "Automatik"
+      : l.transmission === "manual"
+        ? "Schaltgetriebe"
+        : null,
+    l.power_kw ? `${l.power_kw} kW` : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 export function ListingsTable({ items }: { items: Listing[] }) {
   if (items.length === 0) {
     return (
@@ -32,7 +55,7 @@ export function ListingsTable({ items }: { items: Listing[] }) {
                 </span>
                 {l.make && (
                   <span className="line-clamp-1 text-xs text-slate-400">
-                    {l.raw_title}
+                    {specsLine(l) || l.raw_title}
                   </span>
                 )}
               </td>

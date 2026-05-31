@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from sqlmodel import Session, select
 
 from carcatcher.db.models import Listing, ListingStatus, utcnow
-from carcatcher.scraping.base import ListingStub, Scraper
+from carcatcher.scraping.base import ListingStub, Scraper, sha256_text
 from carcatcher.schemas import StructuredFilters
 
 
@@ -34,6 +34,7 @@ def _apply_stub(listing: Listing, scraper: Scraper, stub: ListingStub) -> None:
     listing.status = ListingStatus.ACTIVE.value
     listing.last_seen_at = utcnow()
     listing.scraped_at = utcnow()
+    listing.raw_html_hash = sha256_text(f"{stub.title}\n{stub.description_hint or ''}")
 
     # Deterministic card specs (price/mileage/year) — not AI normalization.
     for key, value in scraper.basic_specs(stub).items():
@@ -55,7 +56,12 @@ def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
         session.commit()
         return "new"
 
+    old_hash = existing.raw_html_hash
     _apply_stub(existing, scraper, stub)
+    if existing.raw_html_hash != old_hash:
+        # Content changed → invalidate downstream AI/scoring so it recomputes.
+        existing.normalized_at = None
+        existing.scored_at = None
     session.add(existing)
     session.commit()
     return "updated"
