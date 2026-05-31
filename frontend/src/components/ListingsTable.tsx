@@ -28,10 +28,15 @@ function specsLine(l: Listing): string {
 export function ListingsTable({
   items,
   onSelect,
+  selectedIds,
+  onToggleSelect,
 }: {
   items: Listing[];
   onSelect?: (id: number) => void;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
 }) {
+  const selectable = !!onToggleSelect;
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 p-12 text-center text-slate-500">
@@ -45,6 +50,7 @@ export function ListingsTable({
       <table className="w-full text-left text-sm">
         <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
+            {selectable && <th className="w-10 px-4 py-3" />}
             <th className="px-4 py-3 font-medium">Title</th>
             <th className="px-4 py-3 font-medium">Price</th>
             <th className="px-4 py-3 font-medium">Deal</th>
@@ -61,6 +67,17 @@ export function ListingsTable({
               onClick={() => onSelect?.(l.id)}
               className={`hover:bg-slate-50 ${onSelect ? "cursor-pointer" : ""}`}
             >
+              {selectable && (
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds?.has(l.id) ?? false}
+                    onChange={() => onToggleSelect?.(l.id)}
+                    aria-label={`Select ${l.make ?? ""} ${l.model ?? l.raw_title}`}
+                    className="h-4 w-4 accent-violet-600"
+                  />
+                </td>
+              )}
               <td className="max-w-md px-4 py-3">
                 <span className="line-clamp-1 font-medium text-slate-900">
                   {l.make && l.model ? `${l.make} ${l.model}` : l.raw_title}

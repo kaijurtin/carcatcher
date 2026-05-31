@@ -9,6 +9,8 @@ from sqlmodel import Session, select
 
 from carcatcher.ai.client import AIClient
 from carcatcher.ai.evaluate import Evaluator
+from carcatcher.ai.nl_search import Translator
+from carcatcher.ai.recommend import Recommender
 from carcatcher.app_state import AppState, set_state
 from carcatcher.config import Settings
 from carcatcher.db.engine import get_engine
@@ -30,6 +32,8 @@ def state():
         ai=ai,
         extractor=Extractor(ai),
         evaluator=Evaluator(ai),
+        translator=Translator(ai),
+        recommender=Recommender(ai),
     )
     set_state(st)
     yield st

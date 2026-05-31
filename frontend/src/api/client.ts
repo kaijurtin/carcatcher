@@ -1,6 +1,13 @@
 /** Thin fetch wrapper around the CarCatcher API. */
 
-import type { ListingsPage, ListingQuery, CrawlRun, Listing } from "../types";
+import type {
+  ListingsPage,
+  ListingQuery,
+  CrawlRun,
+  Listing,
+  NlSearchResponse,
+  RecommendResponse,
+} from "../types";
 
 const BASE = "/api";
 
@@ -58,6 +65,29 @@ export async function evaluateListing(id: number): Promise<Listing> {
 
 export function getRuns(limit = 10): Promise<CrawlRun[]> {
   return apiGet<CrawlRun[]>(`/runs?limit=${limit}`);
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const resp = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (resp.status === 409) {
+    throw new ApiError(409, "AI is disabled or unconfigured on the server");
+  }
+  if (!resp.ok) {
+    throw new ApiError(resp.status, `POST ${path} failed: ${resp.status}`);
+  }
+  return (await resp.json()) as T;
+}
+
+export function nlSearch(query: string): Promise<NlSearchResponse> {
+  return apiPost<NlSearchResponse>("/search/nl", { query });
+}
+
+export function recommend(listingIds: number[]): Promise<RecommendResponse> {
+  return apiPost<RecommendResponse>("/recommend", { listing_ids: listingIds });
 }
 
 export type RefreshResult = "scheduled" | "running" | "unauthorized" | "error";

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from carcatcher.ai.client import AIClient
 from carcatcher.ai.evaluate import Evaluator
+from carcatcher.ai.nl_search import Translator
+from carcatcher.ai.recommend import Recommender
 from carcatcher.config import Settings, get_settings
 from carcatcher.normalization.extractor import Extractor
 from carcatcher.scraping.base import Scraper
@@ -26,6 +28,8 @@ class AppState:
     ai: AIClient
     extractor: Extractor
     evaluator: Evaluator
+    translator: Translator
+    recommender: Recommender
     scheduler: "AsyncIOScheduler | None" = None
     crawl_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -44,6 +48,8 @@ def build_state(settings: Settings | None = None) -> AppState:
         ai=ai,
         extractor=Extractor(ai),
         evaluator=Evaluator(ai),
+        translator=Translator(ai),
+        recommender=Recommender(ai),
     )
 
 

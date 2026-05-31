@@ -66,6 +66,27 @@ export interface CrawlRun {
   error: string | null;
 }
 
+export interface NlSearchResponse {
+  query: string;
+  filters: Record<string, unknown>;
+  ranking: { field: string; direction: string }[];
+  rationale: string;
+  results: Listing[];
+  total: number;
+}
+
+export interface Recommendation {
+  top_pick_id: number;
+  summary: string;
+  ranking: { listing_id: number; rank: number; reason: string }[];
+  caveats: string[];
+}
+
+export interface RecommendResponse {
+  recommendation: Recommendation;
+  listings: Listing[];
+}
+
 export type SortField = "scraped_at" | "price" | "deal_score" | "year" | "mileage_km";
 
 export interface ListingQuery {

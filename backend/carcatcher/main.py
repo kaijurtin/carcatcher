@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from carcatcher.api.routes import health, listings, refresh
+from carcatcher.api.routes import health, listings, recommend, refresh, search
 from carcatcher.app_state import build_state, get_state, set_state
 from carcatcher.config import get_settings
 from carcatcher.db.engine import init_db
@@ -45,6 +45,8 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(listings.router, prefix="/api")
     app.include_router(refresh.router, prefix="/api")
+    app.include_router(search.router, prefix="/api")
+    app.include_router(recommend.router, prefix="/api")
     return app
 
 
