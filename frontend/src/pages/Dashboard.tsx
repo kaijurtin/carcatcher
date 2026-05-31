@@ -17,11 +17,24 @@ const SORTS: { value: SortField; label: string }[] = [
 ];
 const DESC_SORTS: SortField[] = ["scraped_at", "year", "deal_score"];
 
+const SOURCES: { value: string; label: string }[] = [
+  { value: "", label: "All sources" },
+  { value: "kleinanzeigen", label: "Kleinanzeigen" },
+  { value: "autoscout24", label: "AutoScout24" },
+  { value: "mobilede", label: "mobile.de" },
+];
+
 export function Dashboard() {
   const [sort, setSort] = useState<SortField>("scraped_at");
+  const [source, setSource] = useState<string>("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
-  const { data, loading, error, reload } = useListings({ sort, order, page_size: 50 });
+  const { data, loading, error, reload } = useListings({
+    sort,
+    order,
+    source: source || undefined,
+    page_size: 50,
+  });
 
   // NL search overlay
   const [nl, setNl] = useState<NlSearchResponse | null>(null);
@@ -114,20 +127,34 @@ export function Dashboard() {
             </button>
           )}
           {!nl && (
-            <label className="flex items-center gap-2 text-sm text-slate-500">
-              Sort
+            <>
               <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortField)}
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                aria-label="Source"
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
               >
-                {SORTS.map((s) => (
+                {SOURCES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
                   </option>
                 ))}
               </select>
-            </label>
+              <label className="flex items-center gap-2 text-sm text-slate-500">
+                Sort
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortField)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
+                >
+                  {SORTS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
           )}
           <RefreshControls onComplete={reload} />
         </div>

@@ -56,6 +56,9 @@ class Scraper(ABC):
 
     name: str
     base_url: str
+    # True when the list page already yields fully structured fields (make/model/
+    # year/…), so basic_specs is authoritative and Haiku normalization is skipped.
+    provides_structured_data: bool = False
 
     @abstractmethod
     async def search(

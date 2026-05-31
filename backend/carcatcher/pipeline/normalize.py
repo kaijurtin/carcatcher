@@ -37,8 +37,12 @@ class NormalizeStats:
 
 
 def apply_normalized(listing: Listing, norm: NormalizedListing) -> None:
+    # Non-destructive: only overwrite when Haiku actually returned a value, so a
+    # sparse extraction can never null out fields already populated by a scraper.
     for field in _AI_FIELDS:
-        setattr(listing, field, getattr(norm, field))
+        value = getattr(norm, field)
+        if value is not None:
+            setattr(listing, field, value)
     for field in _FILL_IF_MISSING:
         if getattr(listing, field) is None and getattr(norm, field) is not None:
             setattr(listing, field, getattr(norm, field))

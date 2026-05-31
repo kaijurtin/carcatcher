@@ -52,6 +52,12 @@ def _apply_stub(listing: Listing, scraper: Scraper, stub: ListingStub) -> None:
     for key, value in scraper.basic_specs(stub).items():
         setattr(listing, key, value)
 
+    # Structured sources (e.g. AutoScout24) already provide clean fields — mark
+    # normalized so Haiku is skipped (running it on sparse detail text would null
+    # out the good data).
+    if scraper.provides_structured_data and listing.make and listing.model:
+        listing.normalized_at = utcnow()
+
 
 def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
     """Insert or update a Listing for `stub`. Returns "new" or "updated"."""
@@ -72,10 +78,13 @@ def upsert_stub(session: Session, scraper: Scraper, stub: ListingStub) -> str:
     _apply_stub(existing, scraper, stub)
     if existing.raw_html_hash != old_hash:
         # Content changed → invalidate downstream AI/scoring so it recomputes.
-        existing.normalized_at = None
         existing.scored_at = None
         existing.ai_evaluated_at = None
         existing.ai_evaluation = None
+        # Re-normalize only for unstructured sources; structured ones were just
+        # re-marked normalized by _apply_stub.
+        if not scraper.provides_structured_data:
+            existing.normalized_at = None
     session.add(existing)
     session.commit()
     return "updated"
@@ -111,6 +120,20 @@ def build_searches(session: Session) -> list[StructuredFilters]:
     for ss in session.exec(select(SavedSearch)).all():
         searches.append(_filters_from_criteria(ss.criteria))
     return searches
+
+
+async def run_all_sources(*, trigger: str = "scheduled") -> list[int]:
+    """Run the pipeline for every configured source sequentially. Returns run ids."""
+    ids: list[int] = []
+    for source in get_settings().crawl_sources_list:
+        try:
+            run_id = await run_pipeline(source=source, trigger=trigger)
+        except Exception:  # noqa: BLE001 — one source failing shouldn't stop the rest
+            logger.exception("source %s failed during multi-source crawl", source)
+            continue
+        if run_id is not None:
+            ids.append(run_id)
+    return ids
 
 
 async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "scheduled") -> int | None:

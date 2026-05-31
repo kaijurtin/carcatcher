@@ -41,6 +41,8 @@ class Settings(BaseSettings):
 
     # --- Scheduler / snapshot ---
     scheduler_enabled: bool = True
+    # Comma-separated sources crawled each run (must be registered scrapers).
+    crawl_sources: str = "kleinanzeigen,autoscout24,mobilede"
     cron_schedule: str = "0 */3 * * *"  # every 3 hours
     cron_secret: str = "change-me"
     run_timeout_minutes: int = 30
@@ -50,6 +52,10 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         """SQLAlchemy URL for the SQLite database."""
         return f"sqlite:///{self.database_path}"
+
+    @property
+    def crawl_sources_list(self) -> list[str]:
+        return [s.strip() for s in self.crawl_sources.split(",") if s.strip()]
 
 
 _settings: Settings | None = None

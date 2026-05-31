@@ -2,6 +2,12 @@ import type { Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
 import { DealScoreBadge } from "./DealScoreBadge";
 
+export const SOURCE_LABEL: Record<string, string> = {
+  kleinanzeigen: "Kleinanzeigen",
+  autoscout24: "AutoScout24",
+  mobilede: "mobile.de",
+};
+
 const FUEL_LABEL: Record<string, string> = {
   petrol: "Benzin",
   diesel: "Diesel",
@@ -79,8 +85,13 @@ export function ListingsTable({
                 </td>
               )}
               <td className="max-w-md px-4 py-3">
-                <span className="line-clamp-1 font-medium text-slate-900">
-                  {l.make && l.model ? `${l.make} ${l.model}` : l.raw_title}
+                <span className="flex items-center gap-2">
+                  <span className="line-clamp-1 font-medium text-slate-900">
+                    {l.make && l.model ? `${l.make} ${l.model}` : l.raw_title}
+                  </span>
+                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                    {SOURCE_LABEL[l.source] ?? l.source}
+                  </span>
                 </span>
                 {l.make && (
                   <span className="line-clamp-1 text-xs text-slate-400">
