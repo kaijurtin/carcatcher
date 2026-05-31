@@ -11,11 +11,10 @@ services:
     env_file: .env
     environment:
       - DATABASE_PATH=/data/db/carcatcher.db
-      - FIRECRAWL_BASE_URL=http://firecrawl-api:3002
+      # FIRECRAWL_BASE_URL comes from .env: cloud (https://api.firecrawl.dev) by
+      # default, or http://firecrawl-api:3002 when running the `selfhost` profile.
     volumes:
       - ${DATA_DIR:-./data}:/data
-    depends_on:
-      - firecrawl-api
     expose:
       - "8000"
     healthcheck:
@@ -35,11 +34,13 @@ services:
 
   # --- Firecrawl (self-hosted) ---------------------------------------------
   firecrawl-redis:
+    profiles: ["selfhost"]
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
 
   firecrawl-postgres:
+    profiles: ["selfhost"]
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -50,6 +51,7 @@ services:
       - firecrawl-pgdata:/var/lib/postgresql/data
 
   firecrawl-rabbitmq:
+    profiles: ["selfhost"]
     image: rabbitmq:3.13
     restart: unless-stopped
     environment:
@@ -57,12 +59,14 @@ services:
       - RABBITMQ_DEFAULT_PASS=firecrawl
 
   firecrawl-playwright:
+    profiles: ["selfhost"]
     image: ${PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
     restart: unless-stopped
     environment:
       - PORT=3000
 
   firecrawl-api:
+    profiles: ["selfhost"]
     image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
     restart: unless-stopped
     environment:

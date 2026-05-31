@@ -8,6 +8,7 @@ than the DOM — robust, and it makes Haiku normalization unnecessary for this s
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import AsyncIterator
 
@@ -16,6 +17,8 @@ from bs4 import BeautifulSoup
 from carcatcher.scraping.base import ListingStub, RawPage, Scraper
 from carcatcher.scraping.firecrawl_client import FirecrawlClient
 from carcatcher.schemas import StructuredFilters
+
+logger = logging.getLogger(__name__)
 
 SOURCE = "autoscout24"
 BASE_URL = "https://www.autoscout24.de"
@@ -188,8 +191,15 @@ class AutoScout24Scraper(Scraper):
     ) -> AsyncIterator[ListingStub]:
         for page in range(1, max_pages + 1):
             url = build_search_url(filters, page)
-            data = await self._fc.scrape(url, formats=["html"], only_main_content=False)
-            html = data.get("html") or data.get("rawHtml") or ""
+            try:
+                # rawHtml preserves the __NEXT_DATA__ script (cleaned `html` strips it).
+                data = await self._fc.scrape(
+                    url, formats=["rawHtml"], only_main_content=False
+                )
+            except Exception as exc:  # noqa: BLE001 — transient page error shouldn't fail the run
+                logger.warning("autoscout24 page %s failed, stopping paging: %s", page, exc)
+                break
+            html = data.get("rawHtml") or data.get("html") or ""
             stubs = parse_search_html(html)
             if not stubs:
                 break

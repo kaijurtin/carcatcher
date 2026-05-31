@@ -8,6 +8,7 @@ backend. Anti-bot posture: low volume, throttled in FirecrawlClient, "Gesuch"
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import AsyncIterator
 
@@ -16,6 +17,8 @@ from bs4 import BeautifulSoup
 from carcatcher.scraping.base import ListingStub, RawPage, Scraper
 from carcatcher.scraping.firecrawl_client import FirecrawlClient
 from carcatcher.schemas import StructuredFilters
+
+logger = logging.getLogger(__name__)
 
 SOURCE = "kleinanzeigen"
 BASE_URL = "https://www.kleinanzeigen.de"
@@ -148,7 +151,13 @@ class KleinanzeigenScraper(Scraper):
     ) -> AsyncIterator[ListingStub]:
         for page in range(1, max_pages + 1):
             url = build_search_url(filters, page)
-            data = await self._fc.scrape(url, formats=["html"], only_main_content=False)
+            try:
+                data = await self._fc.scrape(
+                    url, formats=["html"], only_main_content=False
+                )
+            except Exception as exc:  # noqa: BLE001 — transient page error shouldn't fail the run
+                logger.warning("kleinanzeigen page %s failed, stopping paging: %s", page, exc)
+                break
             html = data.get("html") or data.get("rawHtml") or ""
             stubs = parse_search_html(html)
             if not stubs:
