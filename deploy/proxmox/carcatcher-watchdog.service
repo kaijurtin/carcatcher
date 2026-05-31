@@ -1,0 +1,12 @@
+[Unit]
+Description=CarCatcher health watchdog (host-side)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Adjust CTID / health URL to match the deployed LXC.
+Environment=CARCATCHER_CTID=113
+Environment=CARCATCHER_HEALTH_URL=http://192.168.178.0:8080/api/health
+Environment=ALERT_EMAIL=kai@jurtin.de
+ExecStart=/usr/local/bin/carcatcher-watchdog.sh

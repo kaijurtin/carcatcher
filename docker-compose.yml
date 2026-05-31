@@ -1,0 +1,76 @@
+# CarCatcher stack: api (FastAPI) + ui (nginx/React) + self-hosted Firecrawl.
+#
+# Firecrawl self-hosting follows the upstream topology
+# (https://github.com/firecrawl/firecrawl/blob/main/SELF_HOST.md):
+#   firecrawl-redis + firecrawl-playwright + firecrawl-api + firecrawl-worker.
+# Pin FIRECRAWL_IMAGE / PLAYWRIGHT_IMAGE in .env to a known-good tag.
+
+services:
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_PATH=/data/db/carcatcher.db
+      - FIRECRAWL_BASE_URL=http://firecrawl-api:3002
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+    depends_on:
+      - firecrawl-api
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ui:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Bound to the LXC; the shared nginx (LXC 111) proxies to this.
+      - "${UI_PORT:-8080}:80"
+
+  # --- Firecrawl (self-hosted) ---------------------------------------------
+  firecrawl-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+
+  firecrawl-playwright:
+    image: ${PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+
+  firecrawl-api:
+    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://firecrawl-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
+      - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
+      - USE_DB_AUTHENTICATION=false
+      - PORT=3002
+      - HOST=0.0.0.0
+    depends_on:
+      - firecrawl-redis
+      - firecrawl-playwright
+    expose:
+      - "3002"
+
+  firecrawl-worker:
+    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
+    restart: unless-stopped
+    command: ["pnpm", "run", "workers"]
+    environment:
+      - REDIS_URL=redis://firecrawl-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
+      - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
+      - USE_DB_AUTHENTICATION=false
+    depends_on:
+      - firecrawl-redis
+      - firecrawl-api
