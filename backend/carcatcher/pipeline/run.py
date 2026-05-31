@@ -117,6 +117,7 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
     in flight. Imports are local to avoid an app_state import cycle."""
     from carcatcher.app_state import get_state
     from carcatcher.pipeline.normalize import normalize_pending
+    from carcatcher.pipeline.score import score_active
     from carcatcher.pipeline.snapshot import mark_gone, prune_gone, reclaim_stale_runs
 
     settings = get_settings()
@@ -149,6 +150,7 @@ async def run_pipeline(*, source: str = "kleinanzeigen", trigger: str = "schedul
 
                 norm = await normalize_pending(session, state.extractor, source=source)
                 gone = mark_gone(session, source, started)
+                score_active(session, source=source)
                 prune_gone(session, settings.prune_gone_days)
 
                 run = session.get(CrawlRun, run_id)

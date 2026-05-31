@@ -6,14 +6,17 @@ import type { SortField } from "../types";
 
 const SORTS: { value: SortField; label: string }[] = [
   { value: "scraped_at", label: "Newest" },
+  { value: "deal_score", label: "Best deal" },
   { value: "price", label: "Price" },
   { value: "year", label: "Year" },
   { value: "mileage_km", label: "Mileage" },
 ];
 
+const DESC_SORTS: SortField[] = ["scraped_at", "year", "deal_score"];
+
 export function Dashboard() {
   const [sort, setSort] = useState<SortField>("scraped_at");
-  const order = sort === "scraped_at" || sort === "year" ? "desc" : "asc";
+  const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
   const { data, loading, error, reload } = useListings({ sort, order, page_size: 50 });
 
   return (

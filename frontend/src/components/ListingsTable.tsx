@@ -1,5 +1,6 @@
 import type { Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
+import { DealScoreBadge } from "./DealScoreBadge";
 
 const FUEL_LABEL: Record<string, string> = {
   petrol: "Benzin",
@@ -40,6 +41,7 @@ export function ListingsTable({ items }: { items: Listing[] }) {
           <tr>
             <th className="px-4 py-3 font-medium">Title</th>
             <th className="px-4 py-3 font-medium">Price</th>
+            <th className="px-4 py-3 font-medium">Deal</th>
             <th className="px-4 py-3 font-medium">Year</th>
             <th className="px-4 py-3 font-medium">Mileage</th>
             <th className="px-4 py-3 font-medium">Location</th>
@@ -64,6 +66,9 @@ export function ListingsTable({ items }: { items: Listing[] }) {
                 {l.price_negotiable && (
                   <span className="ml-1 text-xs font-normal text-slate-400">VB</span>
                 )}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3">
+                <DealScoreBadge listing={l} />
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                 {formatYear(l.year)}
