@@ -39,6 +39,24 @@ export interface ListingsPage {
   page_size: number;
 }
 
+export interface CrawlRun {
+  id: number;
+  source: string;
+  trigger: string;
+  status: "running" | "done" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  listings_seen: number;
+  listings_new: number;
+  listings_updated: number;
+  listings_gone: number;
+  haiku_calls: number;
+  sonnet_calls: number;
+  opus_calls: number;
+  est_cost_usd: number;
+  error: string | null;
+}
+
 export type SortField = "scraped_at" | "price" | "deal_score" | "year" | "mileage_km";
 
 export interface ListingQuery {

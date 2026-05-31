@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     max_sonnet_evals_per_run: int = 30
 
     # --- Scheduler / snapshot ---
+    scheduler_enabled: bool = True
     cron_schedule: str = "0 */3 * * *"  # every 3 hours
     cron_secret: str = "change-me"
     run_timeout_minutes: int = 30

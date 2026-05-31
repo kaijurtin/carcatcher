@@ -1,4 +1,4 @@
-"""Shared pytest fixtures: isolated in-memory DB + FastAPI TestClient."""
+"""Shared pytest fixtures: deterministic settings + isolated DB + TestClient."""
 
 from __future__ import annotations
 
@@ -7,8 +7,25 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, create_engine
 
+from carcatcher import config
+from carcatcher.config import Settings
 from carcatcher.db import engine as db_engine
 from carcatcher.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def test_settings():
+    """Force deterministic settings: no scheduler, AI off, instant throttle."""
+    config._settings = Settings(
+        scheduler_enabled=False,
+        ai_disabled=True,
+        scrape_min_interval_ms=0,
+        cron_secret="test-secret",
+        prune_gone_days=14,
+        run_timeout_minutes=30,
+    )
+    yield config._settings
+    config._settings = None
 
 
 @pytest.fixture()

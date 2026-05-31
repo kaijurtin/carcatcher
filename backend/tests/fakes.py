@@ -1,6 +1,26 @@
-"""Test doubles for the Anthropic SDK surface used by AIClient."""
+"""Test doubles for the Anthropic SDK surface used by AIClient + Firecrawl."""
 
 from __future__ import annotations
+
+from pathlib import Path
+
+_FIXTURE = Path(__file__).parent / "fixtures" / "kleinanzeigen_search.html"
+
+
+class FakeFirecrawl:
+    """Returns the fixture HTML for the first page, then empty (pagination stop)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def scrape(self, url: str, *, formats=None, only_main_content=True) -> dict:
+        self.calls += 1
+        if self.calls == 1:
+            return {"html": _FIXTURE.read_text(encoding="utf-8")}
+        return {"html": ""}
+
+    async def aclose(self) -> None:  # match FirecrawlClient surface
+        return None
 
 
 class FakeBlock:

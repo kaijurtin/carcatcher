@@ -2,21 +2,41 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from carcatcher.api.routes import health, listings
+from carcatcher.api.routes import health, listings, refresh
+from carcatcher.app_state import build_state, get_state, set_state
 from carcatcher.config import get_settings
 from carcatcher.db.engine import init_db
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure tables exist. (Scheduler is wired in P3.)
     init_db()
-    yield
-    # Shutdown: nothing yet.
+    settings = get_settings()
+    state = build_state(settings)
+    set_state(state)
+
+    if settings.scheduler_enabled:
+        from carcatcher.scheduler.jobs import build_scheduler
+
+        scheduler = build_scheduler()
+        scheduler.start()
+        state.scheduler = scheduler
+        logger.info("scheduler started (cron: %s)", settings.cron_schedule)
+
+    try:
+        yield
+    finally:
+        if state.scheduler is not None:
+            state.scheduler.shutdown(wait=False)
+        await state.firecrawl.aclose()
+        set_state(None)
 
 
 def create_app() -> FastAPI:
@@ -24,6 +44,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     app.include_router(health.router, prefix="/api")
     app.include_router(listings.router, prefix="/api")
+    app.include_router(refresh.router, prefix="/api")
     return app
 
 
