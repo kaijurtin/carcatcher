@@ -21,6 +21,13 @@ Rules:
   Autogas/LPG->lpg, Erdgas/CNG->cng.
 - transmission: manual (Schaltgetriebe/manuell) or automatic (Automatik).
 - power_kw: engine power in kW. If only PS/HP given, convert: kW = round(PS * 0.7355).
+- battery_kwh: ONLY for electric/hybrid cars. Usable battery capacity in kWh
+  (e.g. "77 kWh", "Akkukapazität 58 kWh", "Batteriekapazität: 62"). IMPORTANT:
+  "Reichweite" / range in km is NOT capacity — never put a km figure here. Energy
+  consumption ("kWh/100km") is also NOT capacity. null if not clearly stated.
+- battery_soh_pct: ONLY for electric/hybrid cars. Battery State of Health as a
+  percent 0-100 (e.g. "SoH 92%", "Batteriezustand 95%", "Akku-Gesundheit: 88%").
+  null if not stated. Never infer from age or mileage.
 - body_type: e.g. Kombi/estate, Limousine/sedan, SUV, Cabrio, Kleinwagen.
 - location_city / location_plz: from the location line; PLZ is the 5-digit German code.
 - seller_type: private (Privat) or dealer (Händler/gewerblich) if indicated.
