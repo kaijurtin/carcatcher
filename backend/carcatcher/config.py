@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     ai_monthly_budget_usd: float = 25.0
     haiku_concurrency: int = 5
 
+    # --- AI provider selection (normalization/extractor only) ---
+    # "anthropic" uses the hosted Claude wrapper; "ollama" runs the
+    # categorization/normalization step against a local Ollama model.
+    ai_provider: str = "anthropic"
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_model: str = "qwen2.5:3b"
+
     # --- Scoring ---
     min_comps: int = 5
     deal_threshold: float = 0.08

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from carcatcher.ai.client import AIClient
 from carcatcher.ai.evaluate import Evaluator
 from carcatcher.ai.nl_search import Translator
+from carcatcher.ai.ollama_client import OllamaClient
 from carcatcher.ai.recommend import Recommender
 from carcatcher.config import Settings, get_settings
 from carcatcher.normalization.extractor import Extractor
@@ -42,11 +43,16 @@ def build_state(settings: Settings | None = None) -> AppState:
     firecrawl = FirecrawlClient(settings)
     scrapers = build_registry(firecrawl)
     ai = AIClient(settings)
+    # Only the normalization/extractor step is pluggable; everything else
+    # (evaluator, translator, recommender) stays on the hosted Anthropic client.
+    extractor_client = (
+        OllamaClient(settings) if settings.ai_provider == "ollama" else ai
+    )
     return AppState(
         firecrawl=firecrawl,
         scrapers=scrapers,
         ai=ai,
-        extractor=Extractor(ai),
+        extractor=Extractor(extractor_client),
         evaluator=Evaluator(ai),
         translator=Translator(ai),
         recommender=Recommender(ai),
