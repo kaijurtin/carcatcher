@@ -5,17 +5,33 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import asc, desc
 from sqlmodel import Session, func, select
 
 from carcatcher.db.engine import get_session
-from carcatcher.db.models import Listing, ListingSearch, ListingStatus, SavedSearch
+from carcatcher.db.models import (
+    Favorite,
+    Listing,
+    ListingSearch,
+    ListingStatus,
+    SavedSearch,
+)
 from carcatcher.normalization.makes import canonical_make
 from carcatcher.schemas import filters_from_criteria
 
 router = APIRouter()
+
+
+def _favorite_ids(session: Session, listing_ids: list[int]) -> set[int]:
+    """The subset of `listing_ids` that are favorited (one query, no N+1)."""
+    if not listing_ids:
+        return set()
+    rows = session.exec(
+        select(Favorite.listing_id).where(Favorite.listing_id.in_(listing_ids))  # type: ignore[union-attr]
+    ).all()
+    return set(rows)
 
 
 class ListingRead(BaseModel):
@@ -54,6 +70,7 @@ class ListingRead(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     scraped_at: datetime
+    is_favorite: bool = False
 
 
 class ListingsPage(BaseModel):
@@ -111,12 +128,15 @@ def _build_conditions(
     battery_kwh_max: float | None,
     battery_soh_min: int | None,
     deal_score_min: float | None,
+    favorites_only: bool = False,
 ) -> list:
     """Shared WHERE-clause builder for /listings and /listings/facets so both apply
     identical filtering (including the Phase A per-search make/model match)."""
     conditions = []
     if status != "all":
         conditions.append(Listing.status == status)
+    if favorites_only:
+        conditions.append(Listing.id.in_(select(Favorite.listing_id)))  # type: ignore[union-attr]
     if search_id is not None:
         active_for_search = select(ListingSearch.listing_id).where(
             ListingSearch.search_id == search_id,
@@ -191,6 +211,7 @@ def listing_facets(
     battery_kwh_max: float | None = None,
     battery_soh_min: int | None = None,
     deal_score_min: float | None = None,
+    favorites_only: bool = False,
 ) -> FacetsResponse:
     """Distinct models/variants (with counts) and the battery-kWh range present in the
     current result scope, for building refine-by filters on the dashboard."""
@@ -201,7 +222,7 @@ def listing_facets(
         year_min=year_min, year_max=year_max, price_min=price_min, price_max=price_max,
         mileage_max=mileage_max, battery_kwh_min=battery_kwh_min,
         battery_kwh_max=battery_kwh_max, battery_soh_min=battery_soh_min,
-        deal_score_min=deal_score_min,
+        deal_score_min=deal_score_min, favorites_only=favorites_only,
     )
 
     def _counts(column) -> list[FacetCount]:
@@ -248,6 +269,7 @@ def list_listings(
     battery_kwh_max: float | None = None,
     battery_soh_min: int | None = None,
     deal_score_min: float | None = None,
+    favorites_only: bool = False,
     sort: SortField = "scraped_at",
     order: Literal["asc", "desc"] = "desc",
     page: int = Query(1, ge=1),
@@ -260,7 +282,7 @@ def list_listings(
         year_min=year_min, year_max=year_max, price_min=price_min, price_max=price_max,
         mileage_max=mileage_max, battery_kwh_min=battery_kwh_min,
         battery_kwh_max=battery_kwh_max, battery_soh_min=battery_soh_min,
-        deal_score_min=deal_score_min,
+        deal_score_min=deal_score_min, favorites_only=favorites_only,
     )
 
     total = session.exec(
@@ -278,9 +300,15 @@ def list_listings(
         .limit(page_size)
     )
     items = session.exec(stmt).all()
+    fav_ids = _favorite_ids(session, [i.id for i in items])
+
+    def _read(listing: Listing) -> ListingRead:
+        out = ListingRead.model_validate(listing)
+        out.is_favorite = listing.id in fav_ids
+        return out
 
     return ListingsPage(
-        items=[ListingRead.model_validate(i) for i in items],
+        items=[_read(i) for i in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -294,7 +322,39 @@ def get_listing(
     listing = session.get(Listing, listing_id)
     if listing is None:
         raise HTTPException(status_code=404, detail="listing not found")
-    return ListingRead.model_validate(listing)
+    out = ListingRead.model_validate(listing)
+    out.is_favorite = bool(_favorite_ids(session, [listing.id]))
+    return out
+
+
+@router.put("/listings/{listing_id}/favorite", status_code=204)
+def add_favorite(
+    listing_id: int, session: Session = Depends(get_session)
+) -> Response:
+    """Mark a listing as a favorite (idempotent)."""
+    if session.get(Listing, listing_id) is None:
+        raise HTTPException(status_code=404, detail="listing not found")
+    existing = session.exec(
+        select(Favorite).where(Favorite.listing_id == listing_id)
+    ).first()
+    if existing is None:
+        session.add(Favorite(listing_id=listing_id))
+        session.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/listings/{listing_id}/favorite", status_code=204)
+def remove_favorite(
+    listing_id: int, session: Session = Depends(get_session)
+) -> Response:
+    """Unmark a favorite (idempotent — 204 even if it wasn't favorited)."""
+    existing = session.exec(
+        select(Favorite).where(Favorite.listing_id == listing_id)
+    ).first()
+    if existing is not None:
+        session.delete(existing)
+        session.commit()
+    return Response(status_code=204)
 
 
 @router.post("/listings/{listing_id}/evaluate", response_model=ListingRead)
@@ -304,13 +364,14 @@ async def evaluate_listing(
     """Force a Sonnet evaluation of one listing on demand."""
     from carcatcher.app_state import get_state
     from carcatcher.pipeline.evaluate import evaluate_one
+    from carcatcher.settings_store import get_ai_enabled
 
     listing = session.get(Listing, listing_id)
     if listing is None:
         raise HTTPException(status_code=404, detail="listing not found")
 
     evaluator = get_state().evaluator
-    if not evaluator.enabled:
+    if not evaluator.enabled or not get_ai_enabled(session):
         raise HTTPException(status_code=409, detail="AI is disabled or unconfigured")
 
     await evaluate_one(session, evaluator, listing)

@@ -173,9 +173,11 @@ async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | Non
     -> recompute status -> normalize -> score -> evaluate -> prune, under a lock,
     recorded in a CrawlRun. Returns the run id, or None if skipped."""
     from carcatcher.app_state import get_state
-    from carcatcher.pipeline.evaluate import evaluate_candidates
-    from carcatcher.pipeline.normalize import normalize_pending
+    from carcatcher.pipeline.categorize import categorize_active
+    from carcatcher.pipeline.evaluate import EvalStats, evaluate_candidates
+    from carcatcher.pipeline.normalize import NormalizeStats, normalize_pending
     from carcatcher.pipeline.score import score_active
+    from carcatcher.settings_store import get_ai_enabled
     from carcatcher.pipeline.snapshot import (
         mark_gone_for_search,
         prune,
@@ -209,12 +211,24 @@ async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | Non
             started = run.started_at
 
             try:
+                ai_on = get_ai_enabled(session)  # dashboard toggle + env kill-switch
                 crawl = await crawl_search(session, search, state, settings)
                 gone = mark_gone_for_search(session, search_id, started)
                 recompute_listing_status(session)
-                norm = await normalize_pending(session, state.extractor)
+                # AI off -> skip Haiku/Sonnet entirely (zero tokens); the deterministic
+                # categorizer below still fills make/model/variant/battery.
+                norm = (
+                    await normalize_pending(session, state.extractor)
+                    if ai_on
+                    else NormalizeStats(skipped=True)
+                )
+                categorize_active(session)  # P4.5: deterministic model rules, no AI
                 score_active(session)
-                ev = await evaluate_candidates(session, state.evaluator)
+                ev = (
+                    await evaluate_candidates(session, state.evaluator)
+                    if ai_on
+                    else EvalStats(skipped=True)
+                )
                 prune(session, settings.prune_gone_days)
 
                 run = session.get(CrawlRun, run_id)

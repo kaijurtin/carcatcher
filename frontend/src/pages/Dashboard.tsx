@@ -3,10 +3,17 @@ import { useListings } from "../hooks/useListings";
 import { ListingsTable } from "../components/ListingsTable";
 import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
+import { AiToggle } from "../components/AiToggle";
 import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
 import { FacetFilters, type FacetSelection } from "../components/FacetFilters";
-import { createSavedSearch, getSavedSearches, nlSearch, recommend } from "../api/client";
+import {
+  createSavedSearch,
+  getSavedSearches,
+  nlSearch,
+  recommend,
+  setFavorite,
+} from "../api/client";
 import type {
   Listing,
   NlSearchResponse,
@@ -35,6 +42,7 @@ const SOURCES: { value: string; label: string }[] = [
 export function Dashboard() {
   const [sort, setSort] = useState<SortField>("scraped_at");
   const [source, setSource] = useState<string>("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // Search tabs ("All" = undefined search_id, else a saved search id)
@@ -56,6 +64,7 @@ export function Dashboard() {
     order,
     source: source || undefined,
     search_id: activeSearch === "all" ? undefined : activeSearch,
+    favorites_only: favoritesOnly || undefined,
     page_size: 50,
     ...facetSel,
   });
@@ -93,6 +102,36 @@ export function Dashboard() {
       return next;
     });
   }, []);
+
+  // Favorites (optimistic) — seeded from loaded items' is_favorite flag.
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    const ids = (data?.items ?? [])
+      .filter((l) => l.is_favorite)
+      .map((l) => l.id);
+    setFavoriteIds(new Set(ids));
+  }, [data]);
+
+  const onToggleFavorite = useCallback(async (id: number) => {
+    const willFavorite = !favoriteIds.has(id);
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (willFavorite) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    try {
+      await setFavorite(id, willFavorite);
+    } catch {
+      // Revert on error.
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (willFavorite) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+  }, [favoriteIds]);
 
   const getRecommendation = useCallback(async () => {
     setRecBusy(true);
@@ -220,8 +259,21 @@ export function Dashboard() {
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                onClick={() => setFavoritesOnly((v) => !v)}
+                aria-pressed={favoritesOnly}
+                className={`rounded-full border px-3 py-1 text-sm font-medium ${
+                  favoritesOnly
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {favoritesOnly ? "★" : "☆"} Favorites only
+              </button>
             </>
           )}
+          <AiToggle />
           <RefreshControls onComplete={reload} />
         </div>
       </div>
@@ -263,6 +315,8 @@ export function Dashboard() {
         onSelect={setSelectedId}
         selectedIds={picked}
         onToggleSelect={toggle}
+        favoriteIds={favoriteIds}
+        onToggleFavorite={onToggleFavorite}
       />
 
       {selectedId !== null && (

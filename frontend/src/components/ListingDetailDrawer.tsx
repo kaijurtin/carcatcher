@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { evaluateListing, getListing } from "../api/client";
+import { evaluateListing, getListing, setFavorite } from "../api/client";
 import type { AiEvaluation, Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
 import { DealScoreBadge } from "./DealScoreBadge";
@@ -20,13 +20,18 @@ export function ListingDetailDrawer({
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setListing(null);
     setError(null);
     getListing(listingId)
-      .then((l) => !cancelled && setListing(l))
+      .then((l) => {
+        if (cancelled) return;
+        setListing(l);
+        setIsFavorite(l.is_favorite);
+      })
       .catch((e: unknown) =>
         !cancelled && setError(e instanceof Error ? e.message : "Failed to load"),
       );
@@ -34,6 +39,17 @@ export function ListingDetailDrawer({
       cancelled = true;
     };
   }, [listingId]);
+
+  const onToggleFavorite = async () => {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    try {
+      await setFavorite(listingId, next);
+    } catch (e) {
+      setIsFavorite(!next);
+      setError(e instanceof Error ? e.message : "Favorite update failed");
+    }
+  };
 
   const onEvaluate = async () => {
     setEvaluating(true);
@@ -59,13 +75,29 @@ export function ListingDetailDrawer({
                 : listing.raw_title
               : "Loading…"}
           </h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {listing && (
+              <button
+                onClick={onToggleFavorite}
+                className={`rounded p-1 text-lg leading-none ${
+                  isFavorite
+                    ? "text-amber-400"
+                    : "text-slate-300 hover:bg-slate-100 hover:text-amber-300"
+                }`}
+                aria-label={`Favorite ${listing.make ?? ""} ${listing.model ?? listing.raw_title}`}
+                aria-pressed={isFavorite}
+              >
+                {isFavorite ? "★" : "☆"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </header>
 
         {error && (

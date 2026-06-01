@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
 import { ListingsTable } from "./ListingsTable";
 import type { Listing } from "../types";
 
@@ -35,6 +35,7 @@ function listing(over: Partial<Listing>): Listing {
     comp_count: null,
     ai_evaluation: null,
     ai_evaluated_at: null,
+    is_favorite: false,
     first_seen_at: "2026-05-31T00:00:00Z",
     last_seen_at: "2026-05-31T00:00:00Z",
     scraped_at: "2026-05-31T00:00:00Z",
@@ -62,4 +63,70 @@ test("falls back to raw title when make/model missing", () => {
     />,
   );
   expect(screen.getByText("Mystery Car")).toBeInTheDocument();
+});
+
+test("renders the Model column as make model variant", () => {
+  render(
+    <ListingsTable
+      items={[listing({ make: "Tesla", model: "Model 3", variant: "Long Range" })]}
+    />,
+  );
+  expect(screen.getByText("Tesla Model 3 Long Range")).toBeInTheDocument();
+});
+
+test("renders Battery and SoH columns, with em dash when null", () => {
+  render(
+    <ListingsTable items={[listing({ battery_kwh: 75, battery_soh_pct: 92 })]} />,
+  );
+  expect(screen.getByText("75 kWh")).toBeInTheDocument();
+  expect(screen.getByText("92%")).toBeInTheDocument();
+});
+
+test("shows em dash for Battery and SoH when null", () => {
+  render(
+    <ListingsTable
+      items={[listing({ battery_kwh: null, battery_soh_pct: null })]}
+    />,
+  );
+  // Mileage location and both EV columns render dashes when empty; ensure at least the EV dashes are present.
+  expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+});
+
+test("renders the favorite star and reflects favoriteIds", () => {
+  render(
+    <ListingsTable
+      items={[listing({ id: 7 })]}
+      favoriteIds={new Set([7])}
+      onToggleFavorite={() => {}}
+    />,
+  );
+  const star = screen.getByRole("button", { name: /Favorite/ });
+  expect(star).toHaveTextContent("★");
+});
+
+test("renders an outline star when not favorited", () => {
+  render(
+    <ListingsTable
+      items={[listing({ id: 7 })]}
+      favoriteIds={new Set()}
+      onToggleFavorite={() => {}}
+    />,
+  );
+  expect(screen.getByRole("button", { name: /Favorite/ })).toHaveTextContent("☆");
+});
+
+test("clicking the star calls onToggleFavorite and not onSelect", () => {
+  const onToggleFavorite = vi.fn();
+  const onSelect = vi.fn();
+  render(
+    <ListingsTable
+      items={[listing({ id: 7 })]}
+      favoriteIds={new Set()}
+      onToggleFavorite={onToggleFavorite}
+      onSelect={onSelect}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Favorite/ }));
+  expect(onToggleFavorite).toHaveBeenCalledWith(7);
+  expect(onSelect).not.toHaveBeenCalled();
 });

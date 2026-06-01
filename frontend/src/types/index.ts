@@ -38,6 +38,7 @@ export interface Listing {
   comp_count: number | null;
   ai_evaluation: AiEvaluation | null;
   ai_evaluated_at: string | null;
+  is_favorite: boolean;
   first_seen_at: string;
   last_seen_at: string;
   scraped_at: string;
@@ -106,6 +107,11 @@ export interface SavedSearchCreate {
   enabled?: boolean;
 }
 
+export interface AppSettings {
+  ai_enabled: boolean;
+  ai_configured: boolean;
+}
+
 export interface NlSearchResponse {
   query: string;
   filters: Record<string, unknown>;
@@ -152,6 +158,7 @@ export interface ListingQuery {
   battery_kwh_min?: number;
   battery_kwh_max?: number;
   battery_soh_min?: number;
+  favorites_only?: boolean;
   sort?: SortField;
   order?: "asc" | "desc";
   page?: number;

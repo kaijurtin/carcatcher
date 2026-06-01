@@ -12,7 +12,7 @@ function car(id: number, make: string, model: string): Listing {
     battery_kwh: null, battery_soh_pct: null,
     body_type: null, location_city: null, location_plz: null, seller_type: null,
     fair_price_estimate: 10000, deal_score: 0.1, comp_count: 6, ai_evaluation: null,
-    ai_evaluated_at: null, first_seen_at: "x", last_seen_at: "x", scraped_at: "x",
+    ai_evaluated_at: null, is_favorite: false, first_seen_at: "x", last_seen_at: "x", scraped_at: "x",
   };
 }
 

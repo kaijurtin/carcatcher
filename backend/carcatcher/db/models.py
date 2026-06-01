@@ -177,6 +177,35 @@ class ShortlistItem(SQLModel, table=True):
 
 
 # --------------------------------------------------------------------------- #
+# Favorite — a per-listing star. Single-user, so no owner column. Kept in its own
+# table (not a Listing flag) so favorites survive pruning when a listing goes gone,
+# the same way shortlisted listings do.
+# --------------------------------------------------------------------------- #
+class Favorite(SQLModel, table=True):
+    __tablename__ = "favorite"
+    __table_args__ = (
+        UniqueConstraint("listing_id", name="uq_favorite_listing"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# AppSetting — single-row (id=1) runtime settings, e.g. the dashboard AI toggle.
+# The env `ai_disabled` flag stays a hard kill-switch / initial default; this row
+# is the user-controllable runtime override.
+# --------------------------------------------------------------------------- #
+class AppSetting(SQLModel, table=True):
+    __tablename__ = "app_setting"
+
+    id: int | None = Field(default=None, primary_key=True)  # always row id 1
+    ai_enabled: bool = True
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
 # CrawlRun — run log, crawl lock, and AI cost ledger
 # --------------------------------------------------------------------------- #
 class CrawlRun(SQLModel, table=True):

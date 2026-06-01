@@ -15,6 +15,7 @@ from sqlmodel import Session, select
 
 from carcatcher.db.models import (
     CrawlRun,
+    Favorite,
     Listing,
     ListingSearch,
     ListingStatus,
@@ -65,7 +66,8 @@ def recompute_listing_status(session: Session) -> None:
 
 def prune(session: Session, prune_gone_days: int) -> int:
     """Delete gone links older than the cutoff, then delete orphan Listings (no links)
-    that no ShortlistItem references. Shortlisted listings always survive."""
+    that no ShortlistItem or Favorite references. Shortlisted and favorited listings
+    always survive."""
     cutoff = utcnow() - timedelta(days=prune_gone_days)
     session.exec(  # type: ignore[call-overload]
         delete(ListingSearch)
@@ -79,11 +81,13 @@ def prune(session: Session, prune_gone_days: int) -> int:
 
     linked = select(ListingSearch.listing_id).distinct()
     shortlisted = select(ShortlistItem.listing_id)
+    favorited = select(Favorite.listing_id)
     result = session.exec(  # type: ignore[call-overload]
         delete(Listing)
         .where(
             Listing.id.not_in(linked),  # type: ignore[union-attr]
             Listing.id.not_in(shortlisted),  # type: ignore[union-attr]
+            Listing.id.not_in(favorited),  # type: ignore[union-attr]
         )
         .execution_options(synchronize_session=False)
     )

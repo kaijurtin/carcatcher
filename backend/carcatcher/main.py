@@ -14,6 +14,7 @@ from carcatcher.api.routes import (
     refresh,
     saved_searches,
     search,
+    settings as settings_routes,
 )
 from carcatcher.app_state import build_state, get_state, set_state
 from carcatcher.config import get_settings
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(search.router, prefix="/api")
     app.include_router(recommend.router, prefix="/api")
     app.include_router(saved_searches.router, prefix="/api")
+    app.include_router(settings_routes.router, prefix="/api")
     return app
 
 

@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 
 from carcatcher.db.engine import get_engine
 from carcatcher.db.models import Listing
+from carcatcher.pipeline.categorize import categorize_active
 from carcatcher.pipeline.run import crawl_source
 from carcatcher.scraping.kleinanzeigen import KleinanzeigenScraper
 from carcatcher.schemas import StructuredFilters
@@ -63,3 +64,26 @@ async def test_recrawl_updates_not_duplicates(test_engine):
         assert stats2.updated == 3
         assert stats2.new == 0
         assert len(session.exec(select(Listing)).all()) == 3
+
+
+def test_categorize_active_fills_vw_id_when_ai_off(test_engine):
+    # AI-off shape: only the card fields + raw title are present (make/model None).
+    with Session(get_engine()) as session:
+        session.add(
+            Listing(
+                source="kleinanzeigen", source_id="k1", url="k1",
+                raw_title="VW ID.4 GTX 4MOTION", year=2023,
+            )
+        )
+        session.commit()
+
+        stats = categorize_active(session)
+        assert stats.categorized == 1
+
+        li = session.exec(select(Listing)).one()
+        assert (li.make, li.model, li.variant, li.battery_kwh) == (
+            "Volkswagen", "ID.4", "GTX", 77.0,
+        )
+
+        # Idempotent: a second pass changes nothing.
+        assert categorize_active(session).categorized == 0
