@@ -106,6 +106,12 @@ function SpecGrid({ listing }: { listing: Listing }) {
     ["Fuel", listing.fuel ?? "—"],
     ["Transmission", listing.transmission ?? "—"],
     ["Power", listing.power_kw ? `${listing.power_kw} kW` : "—"],
+    ...(listing.battery_kwh != null
+      ? ([["Battery", `${listing.battery_kwh} kWh`]] as [string, string][])
+      : []),
+    ...(listing.battery_soh_pct != null
+      ? ([["Battery health", `${listing.battery_soh_pct}%`]] as [string, string][])
+      : []),
     ["Seller", listing.seller_type ?? "—"],
     ["Location", listing.location_raw ?? "—"],
   ];

@@ -9,7 +9,7 @@ function listing(over: Partial<Listing>): Listing {
     raw_title: "VW Golf", raw_price: null, location_raw: null, images: [],
     price: 9000, price_negotiable: false, mileage_km: 100000, year: 2015,
     make: "Volkswagen", model: "Golf", variant: null, fuel: null, transmission: null,
-    power_kw: null, body_type: null, location_city: null, location_plz: null,
+    power_kw: null, battery_kwh: null, battery_soh_pct: null, body_type: null, location_city: null, location_plz: null,
     seller_type: null, fair_price_estimate: 10000, deal_score: 0.1, comp_count: 6,
     ai_evaluation: null, ai_evaluated_at: null,
     first_seen_at: "2026-05-31T00:00:00Z", last_seen_at: "2026-05-31T00:00:00Z",

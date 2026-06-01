@@ -12,6 +12,12 @@ function mockApi(health: { status: string }, listings = emptyPage, healthStatus 
     if (url.includes("/api/health")) {
       return new Response(JSON.stringify(health), { status: healthStatus });
     }
+    if (url.includes("/api/listings/facets")) {
+      return new Response(
+        JSON.stringify({ models: [], variants: [], battery_kwh: null }),
+        { status: 200 },
+      );
+    }
     if (url.includes("/api/listings")) {
       return new Response(JSON.stringify(listings), { status: 200 });
     }

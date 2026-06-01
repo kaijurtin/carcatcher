@@ -127,6 +127,17 @@ export interface RecommendResponse {
   listings: Listing[];
 }
 
+export interface FacetCount {
+  value: string;
+  count: number;
+}
+
+export interface Facets {
+  models: FacetCount[];
+  variants: FacetCount[];
+  battery_kwh: { min: number; max: number } | null;
+}
+
 export type SortField = "scraped_at" | "price" | "deal_score" | "year" | "mileage_km";
 
 export interface ListingQuery {

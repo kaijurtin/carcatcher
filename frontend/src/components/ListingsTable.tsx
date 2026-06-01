@@ -27,6 +27,8 @@ function specsLine(l: Listing): string {
         ? "Schaltgetriebe"
         : null,
     l.power_kw ? `${l.power_kw} kW` : null,
+    l.battery_kwh ? `${l.battery_kwh} kWh` : null,
+    l.battery_soh_pct != null ? `SoH ${l.battery_soh_pct}%` : null,
   ].filter(Boolean);
   return parts.join(" · ");
 }

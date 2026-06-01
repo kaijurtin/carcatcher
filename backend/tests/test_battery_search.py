@@ -62,3 +62,46 @@ def test_listing_read_exposes_battery_fields(client):
     assert by_id["e2"]["battery_kwh"] == 77.0
     assert by_id["e2"]["battery_soh_pct"] == 88
     assert by_id["e3"]["battery_kwh"] is None
+
+
+def test_listings_filter_by_variant_and_battery(client):
+    with Session(get_engine()) as s:
+        _seed_evs(s)
+    # variant filter is case-insensitive exact match
+    r = client.get("/api/listings", params={"variant": "pro"})
+    assert {i["source_id"] for i in r.json()["items"]} == {"e2"}
+    # battery kWh min
+    r = client.get("/api/listings", params={"battery_kwh_min": 70})
+    assert {i["source_id"] for i in r.json()["items"]} == {"e2"}
+
+
+def test_facets_returns_models_variants_and_battery_range(client):
+    with Session(get_engine()) as s:
+        _seed_evs(s)
+    facets = client.get("/api/listings/facets").json()
+    models = {m["value"]: m["count"] for m in facets["models"]}
+    assert models == {"ID.4": 2, "Golf": 1}
+    variants = {v["value"] for v in facets["variants"]}
+    assert variants == {"Pure", "Pro"}  # Golf has no variant -> excluded
+    assert facets["battery_kwh"] == {"min": 52.0, "max": 77.0}
+
+
+def test_facets_cascade_with_model_filter(client):
+    with Session(get_engine()) as s:
+        _seed_evs(s)
+    facets = client.get("/api/listings/facets", params={"model": "ID.4"}).json()
+    assert {v["value"] for v in facets["variants"]} == {"Pure", "Pro"}
+    assert facets["battery_kwh"] == {"min": 52.0, "max": 77.0}
+
+
+def test_facets_empty_battery_range_is_null(client):
+    with Session(get_engine()) as s:
+        s.add(
+            Listing(
+                source="kleinanzeigen", source_id="p1", url="p1",
+                raw_title="VW Golf", make="Volkswagen", model="Golf", fuel="petrol",
+            )
+        )
+        s.commit()
+    facets = client.get("/api/listings/facets").json()
+    assert facets["battery_kwh"] is None

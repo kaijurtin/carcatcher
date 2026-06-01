@@ -5,6 +5,7 @@ import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
 import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
+import { FacetFilters, type FacetSelection } from "../components/FacetFilters";
 import { createSavedSearch, getSavedSearches, nlSearch, recommend } from "../api/client";
 import type {
   Listing,
@@ -43,6 +44,12 @@ export function Dashboard() {
     getSavedSearches().then(setSearches).catch(() => setSearches([]));
   }, []);
 
+  // Refine-by facets (model / variant / battery), reset when scope changes.
+  const [facetSel, setFacetSel] = useState<FacetSelection>({});
+  useEffect(() => {
+    setFacetSel({});
+  }, [activeSearch, source]);
+
   const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
   const { data, loading, error, reload } = useListings({
     sort,
@@ -50,6 +57,7 @@ export function Dashboard() {
     source: source || undefined,
     search_id: activeSearch === "all" ? undefined : activeSearch,
     page_size: 50,
+    ...facetSel,
   });
 
   // NL search overlay
@@ -217,6 +225,19 @@ export function Dashboard() {
           <RefreshControls onComplete={reload} />
         </div>
       </div>
+
+      {!nl && (
+        <div className="mb-4">
+          <FacetFilters
+            scope={{
+              search_id: activeSearch === "all" ? undefined : activeSearch,
+              source: source || undefined,
+            }}
+            value={facetSel}
+            onChange={setFacetSel}
+          />
+        </div>
+      )}
 
       {recError && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">

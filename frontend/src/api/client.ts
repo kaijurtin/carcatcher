@@ -4,6 +4,7 @@ import type {
   ListingsPage,
   ListingQuery,
   CrawlRun,
+  Facets,
   Listing,
   NlSearchResponse,
   RecommendResponse,
@@ -52,6 +53,17 @@ export function getListings(query: ListingQuery = {}): Promise<ListingsPage> {
 
 export function getListing(id: number): Promise<Listing> {
   return apiGet<Listing>(`/listings/${id}`);
+}
+
+export function getFacets(query: ListingQuery = {}): Promise<Facets> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+  const qs = params.toString();
+  return apiGet<Facets>(`/listings/facets${qs ? `?${qs}` : ""}`);
 }
 
 export async function evaluateListing(id: number): Promise<Listing> {

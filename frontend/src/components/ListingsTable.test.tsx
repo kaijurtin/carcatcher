@@ -24,6 +24,8 @@ function listing(over: Partial<Listing>): Listing {
     fuel: null,
     transmission: null,
     power_kw: null,
+    battery_kwh: null,
+    battery_soh_pct: null,
     body_type: null,
     location_city: null,
     location_plz: null,
