@@ -4,16 +4,14 @@ their results; auto_evaluate forces Sonnet evaluation of their matches."""
 from __future__ import annotations
 
 import asyncio
-import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import delete, desc
 from sqlmodel import Session, select
 
-from carcatcher.config import get_settings
 from carcatcher.db.engine import get_engine, get_session
 from carcatcher.db.models import (
     Listing,
@@ -79,6 +77,32 @@ def create_saved_search(
     session.commit()
     session.refresh(ss)
     return SavedSearchRead.model_validate(ss)
+
+
+@router.post(
+    "/saved-searches/{search_id}/duplicate",
+    response_model=SavedSearchRead,
+    status_code=201,
+)
+def duplicate_saved_search(
+    search_id: int, session: Session = Depends(get_session)
+) -> SavedSearchRead:
+    """Clone a saved search (criteria + nl_query + auto_evaluate) into a new one so the
+    user can tweak parameters without rebuilding from scratch."""
+    src = session.get(SavedSearch, search_id)
+    if src is None:
+        raise HTTPException(status_code=404, detail="saved search not found")
+    clone = SavedSearch(
+        name=f"Copy of {src.name}",
+        criteria=dict(src.criteria),
+        nl_query=src.nl_query,
+        auto_evaluate=src.auto_evaluate,
+        enabled=src.enabled,
+    )
+    session.add(clone)
+    session.commit()
+    session.refresh(clone)
+    return SavedSearchRead.model_validate(clone)
 
 
 @router.get("/saved-searches/{search_id}", response_model=SavedSearchRead)
@@ -147,13 +171,10 @@ def delete_saved_search(search_id: int, session: Session = Depends(get_session))
 @router.post("/saved-searches/{search_id}/run")
 async def run_saved_search(
     search_id: int,
-    x_cron_secret: str | None = Header(default=None),
     session: Session = Depends(get_session),
 ) -> JSONResponse:
-    """Trigger an on-demand crawl of one saved search (reuses CRON_SECRET)."""
-    settings = get_settings()
-    if not x_cron_secret or not secrets.compare_digest(x_cron_secret, settings.cron_secret):
-        raise HTTPException(status_code=401, detail="invalid or missing cron secret")
+    """Trigger an on-demand crawl of one saved search. No secret required — a manual,
+    user-initiated run (the scheduled cron-all path still gates on CRON_SECRET)."""
     if session.get(SavedSearch, search_id) is None:
         raise HTTPException(status_code=404, detail="saved search not found")
     with Session(get_engine()) as s:

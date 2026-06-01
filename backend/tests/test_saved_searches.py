@@ -54,6 +54,60 @@ def test_update_missing_404(client):
     assert client.put("/api/saved-searches/999", json={"name": "x"}).status_code == 404
 
 
+# --- run-now (no secret) ---------------------------------------------------- #
+def _create(client, **over) -> int:
+    body = {"name": "VW ID.4", "criteria": {"make": "Volkswagen", "model": "ID.4"}}
+    body.update(over)
+    return client.post("/api/saved-searches", json=body).json()["id"]
+
+
+def test_run_now_needs_no_secret(client, monkeypatch):
+    import carcatcher.api.routes.saved_searches as ss_mod
+
+    called = {}
+
+    async def fake_run_search(search_id, **kwargs):
+        called["id"] = search_id
+
+    monkeypatch.setattr(ss_mod, "run_search", fake_run_search)
+    sid = _create(client)
+    resp = client.post(f"/api/saved-searches/{sid}/run")  # no X-Cron-Secret header
+    assert resp.status_code == 202
+    assert resp.json()["status"] == "scheduled"
+
+
+def test_run_now_404_for_missing(client):
+    assert client.post("/api/saved-searches/999/run").status_code == 404
+
+
+def test_run_now_409_when_crawl_running(client):
+    from carcatcher.db.models import CrawlRun, RunStatus
+
+    sid = _create(client)
+    with Session(get_engine()) as s:
+        s.add(CrawlRun(source="kleinanzeigen", status=RunStatus.RUNNING.value))
+        s.commit()
+    assert client.post(f"/api/saved-searches/{sid}/run").status_code == 409
+
+
+# --- duplicate -------------------------------------------------------------- #
+def test_duplicate_clones_criteria_and_query(client):
+    sid = _create(client, nl_query="VW ID.4 GTX ab 2022", auto_evaluate=True)
+    r = client.post(f"/api/saved-searches/{sid}/duplicate")
+    assert r.status_code == 201
+    clone = r.json()
+    assert clone["id"] != sid
+    assert clone["name"] == "Copy of VW ID.4"
+    assert clone["criteria"] == {"make": "Volkswagen", "model": "ID.4"}
+    assert clone["nl_query"] == "VW ID.4 GTX ab 2022"
+    assert clone["auto_evaluate"] is True
+    assert len(client.get("/api/saved-searches").json()) == 2
+
+
+def test_duplicate_404_for_missing(client):
+    assert client.post("/api/saved-searches/999/duplicate").status_code == 404
+
+
 # --- auto_evaluate candidate wiring ----------------------------------------- #
 def _listing(sid: str, **over) -> Listing:
     base = dict(
