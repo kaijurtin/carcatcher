@@ -24,3 +24,10 @@ class StructuredFilters(BaseModel):
     plz: str | None = None
     radius_km: int | None = None
     keywords: str | None = Field(default=None, description="Free-text fallback query")
+
+
+def filters_from_criteria(criteria: dict) -> StructuredFilters:
+    """Build StructuredFilters from a stored `SavedSearch.criteria` dict, ignoring
+    any keys that aren't filter fields."""
+    fields = StructuredFilters.model_fields
+    return StructuredFilters(**{k: v for k, v in criteria.items() if k in fields})

@@ -11,7 +11,9 @@ from sqlalchemy import asc, desc
 from sqlmodel import Session, func, select
 
 from carcatcher.db.engine import get_session
-from carcatcher.db.models import Listing, ListingSearch, ListingStatus
+from carcatcher.db.models import Listing, ListingSearch, ListingStatus, SavedSearch
+from carcatcher.normalization.makes import canonical_make
+from carcatcher.schemas import filters_from_criteria
 
 router = APIRouter()
 
@@ -101,6 +103,18 @@ def list_listings(
             ListingSearch.status == ListingStatus.ACTIVE.value,
         )
         conditions.append(Listing.id.in_(active_for_search))  # type: ignore[union-attr]
+        # Crawl tagging is unconditional, so source "related ads" with a different
+        # make/model get tagged too. Only show listings that actually match the
+        # saved search's own make/model criteria (make canonicalized: VW->Volkswagen).
+        saved = session.get(SavedSearch, search_id)
+        if saved is not None:
+            criteria = filters_from_criteria(saved.criteria)
+            if criteria.make:
+                conditions.append(
+                    func.lower(Listing.make) == canonical_make(criteria.make).lower()
+                )
+            if criteria.model:
+                conditions.append(func.lower(Listing.model) == criteria.model.lower())
     if source:
         conditions.append(Listing.source == source)
     if make:

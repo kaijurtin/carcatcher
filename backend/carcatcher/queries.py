@@ -8,6 +8,7 @@ from sqlalchemy import asc, desc
 from sqlmodel import Session, select
 
 from carcatcher.db.models import Listing, ListingSearch, ListingStatus
+from carcatcher.normalization.makes import canonical_make
 from carcatcher.schemas import StructuredFilters
 
 _SORT_COLUMNS = {
@@ -38,7 +39,7 @@ def search_listings(
         )
         conditions.append(Listing.id.in_(active_for_search))  # type: ignore[union-attr]
     if filters.make:
-        conditions.append(Listing.make.ilike(filters.make))  # type: ignore[union-attr]
+        conditions.append(Listing.make.ilike(canonical_make(filters.make)))  # type: ignore[union-attr]
     if filters.model:
         conditions.append(Listing.model.ilike(filters.model))  # type: ignore[union-attr]
     if filters.fuel:

@@ -24,7 +24,7 @@ from carcatcher.db.models import (
     utcnow,
 )
 from carcatcher.scraping.base import ListingStub, Scraper, sha256_text
-from carcatcher.schemas import StructuredFilters
+from carcatcher.schemas import StructuredFilters, filters_from_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -128,14 +128,9 @@ async def crawl_source(
     return stats
 
 
-def _filters_from_criteria(criteria: dict) -> StructuredFilters:
-    fields = StructuredFilters.model_fields
-    return StructuredFilters(**{k: v for k, v in criteria.items() if k in fields})
-
-
 async def crawl_search(session: Session, search: SavedSearch, state, settings) -> CrawlStats:
     """Crawl every source with one search's filters, tagging each listing with it."""
-    filters = _filters_from_criteria(search.criteria)
+    filters = filters_from_criteria(search.criteria)
     stats = CrawlStats()
     for name, scraper in state.scrapers.items():
         try:
