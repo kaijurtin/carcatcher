@@ -21,6 +21,9 @@ class StructuredFilters(BaseModel):
     fuel: str | None = None
     transmission: str | None = None
     seller_type: str | None = None
+    battery_kwh_min: int | None = None
+    battery_kwh_max: int | None = None
+    battery_soh_min: int | None = None
     plz: str | None = None
     radius_km: int | None = None
     keywords: str | None = Field(default=None, description="Free-text fallback query")

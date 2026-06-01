@@ -27,6 +27,8 @@ export interface Listing {
   fuel: string | null;
   transmission: string | null;
   power_kw: number | null;
+  battery_kwh: number | null;
+  battery_soh_pct: number | null;
   body_type: string | null;
   location_city: string | null;
   location_plz: string | null;
@@ -78,6 +80,9 @@ export interface StructuredFilters {
   fuel?: string | null;
   transmission?: string | null;
   seller_type?: string | null;
+  battery_kwh_min?: number | null;
+  battery_kwh_max?: number | null;
+  battery_soh_min?: number | null;
   plz?: string | null;
   keywords?: string | null;
 }
@@ -129,9 +134,13 @@ export interface ListingQuery {
   search_id?: number;
   make?: string;
   model?: string;
+  variant?: string;
   price_max?: number;
   mileage_max?: number;
   year_min?: number;
+  battery_kwh_min?: number;
+  battery_kwh_max?: number;
+  battery_soh_min?: number;
   sort?: SortField;
   order?: "asc" | "desc";
   page?: number;

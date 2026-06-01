@@ -22,6 +22,7 @@ from carcatcher.normalization.schema import NormalizedListing
 _AI_FIELDS = (
     "make", "model", "variant", "fuel", "transmission",
     "power_kw", "body_type", "location_city", "location_plz", "seller_type",
+    "battery_kwh", "battery_soh_pct",
 )
 # Deterministic card fields: trust the card; only fill if missing.
 _FILL_IF_MISSING = ("price", "mileage_km", "year")

@@ -19,6 +19,9 @@ Filter rules:
   Elektro->electric, "sparsam"/economical -> prefer diesel or hybrid).
 - transmission: manual/automatic (Automatik->automatic, Schaltung->manual).
 - price_max / price_min in EUR; mileage_max in km; year_min/year_max are registration years.
+- battery_kwh_min / battery_kwh_max: EV usable battery capacity in kWh ("mindestens 77 kWh"
+  -> battery_kwh_min: 77). Only for electric/hybrid requests.
+- battery_soh_min: EV battery State of Health floor in percent ("SoH ab 90%" -> 90).
 - "Kombi"/estate, "Familienauto" -> hint via model/keywords, not a hard filter.
 - plz: 5-digit German postal code if a location is given.
 
@@ -46,6 +49,9 @@ NL_SEARCH_TOOL_SCHEMA: dict = {
                 "price_min": {"type": ["integer", "null"]},
                 "price_max": {"type": ["integer", "null"]},
                 "mileage_max": {"type": ["integer", "null"]},
+                "battery_kwh_min": {"type": ["integer", "null"]},
+                "battery_kwh_max": {"type": ["integer", "null"]},
+                "battery_soh_min": {"type": ["integer", "null"]},
                 "plz": {"type": ["string", "null"]},
             },
         },

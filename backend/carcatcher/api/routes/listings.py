@@ -40,6 +40,8 @@ class ListingRead(BaseModel):
     fuel: str | None
     transmission: str | None
     power_kw: int | None
+    battery_kwh: float | None
+    battery_soh_pct: int | None
     body_type: str | None
     location_city: str | None
     location_plz: str | None

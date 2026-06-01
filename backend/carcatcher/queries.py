@@ -58,6 +58,12 @@ def search_listings(
         conditions.append(Listing.price <= filters.price_max)
     if filters.mileage_max is not None:
         conditions.append(Listing.mileage_km <= filters.mileage_max)
+    if filters.battery_kwh_min is not None:
+        conditions.append(Listing.battery_kwh >= filters.battery_kwh_min)
+    if filters.battery_kwh_max is not None:
+        conditions.append(Listing.battery_kwh <= filters.battery_kwh_max)
+    if filters.battery_soh_min is not None:
+        conditions.append(Listing.battery_soh_pct >= filters.battery_soh_min)
     if filters.plz:
         conditions.append(Listing.location_plz == filters.plz)
 
