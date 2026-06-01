@@ -23,11 +23,18 @@ Run in a Claude Code session — uses real research tooling (web search + Firecr
 fetch + claim verification), not the live app:
 
 1. Invoke the **`deep-research`** skill with a prompt like:
-   > Research **<Make> <Model>** for a German used-car buyer. Cover: all variants/trims
-   > and their specs (battery usable-kWh, range, power, years); battery **cell
-   > suppliers** by variant/model-year/plant; known problems & recalls (KBA, NHTSA,
-   > TÜV/ADAC defect rates) by year; and the **best model-year/variant to buy** (fewest
-   > issues) with what to check. Cite every claim with a source link.
+   > Research **<Make> <Model>** for a **German** used-car buyer. Cover: all variants/trims
+   > sold in DE/EU and their specs (usable kWh, WLTP range, kW/PS, years); battery **cell
+   > suppliers** by variant/Baujahr/plant; known problems & **KBA Rückrufe** (reference +
+   > VW Aktionscode) plus **TÜV-Report (HU)** and **ADAC Pannenstatistik** findings by
+   > year; and the **best Baujahr/variant to buy** (fewest issues) with what to check and
+   > typical used **€** prices. Cite every claim with a source link.
+
+   **SCOPE (hard rule):** focus on **Germany only** (Luxembourg/France acceptable) —
+   **€ only, German/EU standards**. Prefer KBA, ADAC, TÜV, goingelectric.de,
+   motor-talk.de, autobild.de (+ ev-database.org, batterydesign.net). Do **not** include
+   US/UK or other-market data, NHTSA-only framing, $/£ prices, or US trim names. If only
+   a non-DE source exists for a fact, note it as such or omit it.
 2. Fold the cited output into `TEMPLATE.md`'s sections and save as
    `<make-slug>/<model-slug>.md`. Fill front-matter (`updated`, `sources`).
 3. Commit and deploy (guides ride along in the image).

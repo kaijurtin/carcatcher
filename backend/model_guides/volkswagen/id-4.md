@@ -1,102 +1,105 @@
 ---
 make: Volkswagen
 model: ID.4
+market: Germany (DE, optional LU/FR)
 year_range: 2020–2026
 updated: 2026-06-01
-revisions: 1
-sources: 10
+revisions: 2
+sources: 15
 ---
-# Volkswagen ID.4 — buyer's guide
+# Volkswagen ID.4 — Kaufberatung (DE)
 
-A mid-size electric SUV on VW's MEB platform (built in Zwickau/Emden for Europe,
-Chattanooga for the US). Spacious and comfortable, but its **weak spot is software**,
-and reliability surveys rank it below the EV-SUV average — so a used ID.4 is a good buy
-*only* with all recalls closed and a later software version. Note: much of the detailed
-recall/reliability data below is US-sourced (NHTSA); German KBA/TÜV/ADAC specifics were
-not confirmable from the sources reviewed and are flagged where uncertain.
+Mittelgroßes Elektro-SUV auf VWs MEB-Plattform (für Europa in **Zwickau/Emden** gebaut).
+Geräumig und komfortabel; die **Schwachstelle ist die Software**. Aus ADAC-Sicht
+zuverlässiges Mittelfeld, beim TÜV durchschnittlich. Ein guter Gebrauchtkauf — **aber nur
+mit erledigten Rückrufen und aktueller Software (≥ 3.0, ideal 3.2)**. Scope: DE/EU,
+**Preise in €**, deutsche Standards (KBA, TÜV/HU, ADAC, WLTP).
 
 ## Variants & specs
-Two usable battery sizes underpin the lineup:
-- **Pure / Pure Performance** — ~**52 kWh usable** (55 kWh gross), RWD, lower range.
-- **Pro / Pro Performance / Pro S** — ~**77 kWh usable** (82 kWh gross), RWD, ~150 kW
-  (204 PS); the larger pack is the volume seller.
-- **GTX** — 77 kWh, **dual-motor 4MOTION** (AWD), ~220 kW (299 PS), the performance trim.
-- Later EU model years rebadged trims as **Essential / Match / Black Edition** atop the
-  same battery tiers; a 2024 facelift raised power (Pro ~210 kW/286 PS) and range.
-
-Exact per-year kWh/range/power vary — verify the specific car against
-[Wikipedia: Volkswagen ID.4](https://en.wikipedia.org/wiki/Volkswagen_ID.4). Sold from
-MY2020/2021 onward.
+- **Pure / Pure Performance** — ~**52 kWh nutzbar** (55 kWh brutto), Heckantrieb, WLTP
+  ~340–360 km.
+- **Pro / Pro Performance / Pro S** — ~**77 kWh nutzbar** (82 kWh brutto), Heckantrieb,
+  **150 kW (204 PS)**, WLTP bis ~520 km; das meistverkaufte Paket.
+- **GTX** — 77 kWh, **4MOTION-Allrad**, ~**220 kW (299 PS)**.
+- Spätere Baujahre nutzen z. T. die Ausstattungsnamen **Essential / Match / Black
+  Edition**; das **Facelift (ab 01/2024)** hob Leistung (Pro ~210 kW/286 PS) und Reichweite
+  an. Genaue kWh/WLTP/Leistung je Baujahr prüfen
+  ([Wikipedia](https://de.wikipedia.org/wiki/VW_ID.4), [ev-database.org](https://ev-database.org/car/1240/Volkswagen-ID4-Pro), [ADAC Autokatalog ID.4 Pro](https://www.adac.de/rund-ums-fahrzeug/autokatalog/marken-modelle/vw/id4/1generation/332632/)).
 
 ## Battery cell suppliers
-- **Europe (early, pre-2023):** **LG Energy Solution** cells (plant in Wrocław, Poland)
-  for European-built cars.
-- **US (early):** **SK On** (formerly SK Innovation), Georgia.
-- **MY2023:** supply was **split between LG and SK On** to raise output. The **SK On**
-  82 kWh pack peaks at **~170 kW DC**, the **LG** pack at **~135 kW** — VW quoted 10–80%
-  in ~30 min (SK On) vs ~36 min (LG).
-- **MY2024+:** reportedly **all SK On**.
-
-Practical implication: an SK On pack charges meaningfully faster on a road trip. You
-can't always tell the supplier from the brochure — it's tied to build date/plant.
-Sources are largely US-centric, so **the exact supplier on a given German-market VIN is
-uncertain** — early EU cars are most likely LG.
-([CarsDirect: SK vs LG](https://www.carsdirect.com/automotive-news/green-technology/volkswagen-id-4-sk-vs-lg-batteries-explained))
+- **Europa (Zwickau/Emden):** Zellen von **LG Energy Solution** (Werk Wrocław, Polen) —
+  v. a. frühe Baujahre.
+- **Später / 2. Quelle:** **SK On** kam als zweiter Lieferant hinzu (höhere Stückzahl);
+  SK-On-Pakete laden tendenziell schneller (DC-Peak grob ~170 kW vs. ~135 kW beim frühen
+  77-kWh-LG-Paket).
+- Der konkrete Zell-Lieferant hängt an Bauzeitraum/Werk und ist je VIN nicht immer
+  ablesbar; frühe **EU-Autos sind meist LG**
+  ([Wikipedia](https://de.wikipedia.org/wiki/VW_ID.4), [batterydesign.net](https://www.batterydesign.net/vw-benchmarking-id3-id4-id5-and-id-buzz/)).
 
 ## Known problems & recalls
-- **Door handles → doors can open while driving (safety).** Water ingress into the
-  handle PCB. **NHTSA 23V312 / VW code 57J5**, MY2021–2022, **built in Zwickau, Germany
-  (Dec 2020–Dec 2022)** — so European cars are affected too. Fix = software update +
-  handle inspection, free. A follow-up door-handle recall was later issued.
-  ([Consumer Reports](https://www.consumerreports.org/cars/car-recalls-defects/volkswagen-recalls-id4-ev-to-fix-doors-a8257155809/),
-  [GreenCarReports](https://www.greencarreports.com/news/1144400_vw-recalling-98-800-id-4-evs-because-doors-could-open-unexpectedly))
-- **Center display / cluster fails to boot or resets** → can lose speedometer + rearview
-  camera. **VW code 93S7** (MY2021–2023); separate rearview-camera delay recall **91EG**
-  (MY2022). ([Cars.com recalls](https://www.cars.com/research/volkswagen-id.4/recalls/))
-- **Weak 12V battery** — a flat 12V can stop the high-voltage pack from coming online,
-  leaving the car "dead" even when charged; many owners report 12V replacement in year 1
-  (often under warranty).
-- **Software/infotainment** — frozen/laggy screens, glitchy Bluetooth, occasional DC
-  fast-charge refusals or mid-session drops, mostly firmware-related; **early 2021–2022
-  builds were hit hardest**.
-  ([Recharged: common problems](https://recharged.com/articles/vw-id4-common-problems-and-fixes))
-- **Reliability standing:** *What Car?* placed the ID.4 **last of 27 electric SUVs
-  (79.6%)**, with faults concentrated in the electric motor (~18%), battery pack (~11%),
-  12V (~4%) and charging system.
-  ([What Car? reliability](https://www.whatcar.com/volkswagen/id4/estate/used-review/n25724/reliability))
-  German **ADAC/TÜV** defect figures were not confirmable from the reviewed sources —
-  cross-check the ADAC Pannenstatistik / TÜV-Report for the specific year before buying.
+**KBA-Rückrufe (DE):**
+- **Türgriffe** — Wassereintritt in die Griff-Platine → Türen können sich (bei niedrigem
+  Tempo/Querkräften) **unerwartet öffnen**. VW-Aktionscode **57J5**; betrifft Baujahre
+  **2021–2024** (Zwickau & Chattanooga), ~**98.806** Fahrzeuge. Abhilfe: Griffe prüfen/
+  tauschen + Software-Update
+  ([elektroauto-news.net](https://www.elektroauto-news.net/news/rueckruf-98806-vw-id4), [auto-motor-und-sport](https://www.auto-motor-und-sport.de/elektroauto/vw-id-4-rueckruf-usa-tueren-oeffnen-beim-fahren/)).
+- **Brandgefahr Hochvoltbatterie (2026)** — fehlerhaftes **Batteriemodul**. KBA-Referenz
+  **16271R**, VW-Aktionscode **93MI**; **74.579** Fahrzeuge ID.3/ID.4/ID.5/ID. Buzz mit
+  **Produktionszeitraum 24.06.2023–23.08.2024** (zzgl. Cupra Born)
+  ([ecomento.de](https://ecomento.de/2026/03/24/vw-muss-fast-100-000-meb-fahrzeuge-zurueckrufen/), [auto-motor-und-sport](https://www.auto-motor-und-sport.de/verkehr/rueckruf-der-meb-modelle-von-vw-ein-fehlerhaftes-batteriemodul/), [t-online](https://www.t-online.de/mobilitaet/aktuelles/id_101184306/vw-rueckruf-wegen-brandgefahr-id-3-id-4-id-5-id-buzz-cupra-born.html)).
+- **Display/Kombiinstrument** kann nicht booten / sich zurücksetzen (Verlust von Tacho/
+  Rückfahrkamera) — per Software-Update adressiert.
+
+**Typische Mängel (Foren/Werkstatt):** Software/Infotainment (einfrierende Screens,
+Assistenz-Aussetzer), **DC-Ladeprobleme** bzw. defekte **Ladeklappe** häufiger als
+HV-Akku-Defekte; vereinzelt defekte Zellen → Tausch auf Garantie. Frühe **2021–2022**
+am stärksten betroffen
+([goingelectric.de](https://www.goingelectric.de/forum/viewtopic.php?t=91695), [carwiki.de](https://carwiki.de/vw-id-4-probleme), [MOTOR-TALK](https://www.motor-talk.de/forum/erfahrung-mit-gebrauchtem-vw-id-4-pro-baujahr-2021-22-t8508196.html)).
+
+**TÜV-Report 2026 (HU) & ADAC:** TÜV nur **durchschnittlich** (E-Auto-Ranking ~Platz 9
+von 18); Licht/Bremsen gut, **Fußbrems-Funktion** auffällig häufiger bemängelt (typisch
+für Rekuperation). ADAC: ab **Erstzulassung 2022** „hohe bis sehr hohe Zufriedenheit",
+keine auffälligen Pannenschwerpunkte; für 2020 keine Daten
+([ADAC TÜV-Report 2026](https://www.adac.de/news/tuev-report-2026/), [t-online Gebrauchtwagen-Check](https://www.t-online.de/mobilitaet/aktuelles/id_101106978/gebrauchtwagen-check-vw-id-4-und-id-5-beim-tuev.html)).
 
 ## Buying tips — best year
-- **Prefer MY2023+** with **ID.Software 3.0/3.1 or newer** — the 3.x updates were the
-  first to make the infotainment feel solid; some 2023 cars shipped 3.1 from the factory.
-  **2022–2023** is the commonly cited sweet spot.
-  ([Recharged: software history](https://recharged.com/articles/vw-id4-software-update-history),
-  [JD Power 2023 review](https://www.jdpower.com/cars/expert-reviews/2023-volkswagen-id-4-review-update),
-  [CoPilot: most reliable years](https://www.copilotsearch.com/posts/most-reliable-year-model-of-the-volkswagen-id4/))
-- **Avoid** early 2021–2022 cars still on old software (e.g. 2.1) that were never updated.
-- **Check on a used example:**
-  - All recalls **closed** (door handle 57J5, display 93S7, camera 91EG) — an open
-    safety recall (Rückruf) is a hard pass until done; verify via VIN (KBA/NHTSA).
-  - **Software version** (Settings → System) — newer is better.
-  - **12V battery** health / replacement history.
-  - **DC fast-charge test** (confirm it starts and holds; SK On pack charges faster).
-  - **Battery SoH** — VW warrants the HV pack ~8 years / 160 000 km to ~70% capacity;
-    ask for a state-of-health readout.
+- **Empfehlung: ab Baujahr 2023** (bzw. EZ 2022+) mit **Software ≥ 3.0, ideal 3.2** — ab
+  3.0 lief das System deutlich runder; **2.1–3.0 war schwach**. Früh-Baujahre, die nie
+  aktualisiert wurden, meiden.
+- **Preise (DE-Gebraucht):** ab ~**23.000 €** (Baujahr 2021, ~60.000–90.000 km);
+  gepflegte Pro mit 30.000–50.000 km ~**26.000–32.000 €**. Das **77-kWh-Pro** ist die
+  beliebteste, alltagstauglichste Wahl
+  ([autobild.de Gebrauchtwagen-Test](https://www.autobild.de/artikel/vw-id.4-gebrauchtwagen-test-28555615.html), [goingelectric.de](https://www.goingelectric.de/forum/viewtopic.php?t=91695)).
+- **Beim Kauf prüfen:**
+  - Alle **Rückrufe erledigt** (57J5 Türgriff, 16271R/93MI Batterie, Display) — offener
+    Sicherheits-Rückruf = kein Kauf, bis erledigt; per FIN beim KBA/Händler prüfen.
+  - **Software-Version** (Einstellungen → System) — je neuer, desto besser.
+  - **12-V-Batterie** (schwache 12-V kann HV-System lahmlegen) und **DC-Ladetest** inkl.
+    **Ladeklappe**.
+  - **Akku-SoH:** nach ~100.000 km typ. **~85–90 %**; Degradation gering (Aviloo-Test ~2 %
+    nach 1 Jahr). VW-**Akkugarantie 8 Jahre / 160.000 km** bis ~70 % Kapazität.
 
 ## Sources
-1. [Wikipedia — Volkswagen ID.4](https://en.wikipedia.org/wiki/Volkswagen_ID.4)
-2. [CarsDirect — ID.4 SK vs LG batteries](https://www.carsdirect.com/automotive-news/green-technology/volkswagen-id-4-sk-vs-lg-batteries-explained)
-3. [Cars.com — ID.4 recalls](https://www.cars.com/research/volkswagen-id.4/recalls/)
-4. [Consumer Reports — door recall](https://www.consumerreports.org/cars/car-recalls-defects/volkswagen-recalls-id4-ev-to-fix-doors-a8257155809/)
-5. [GreenCarReports — door recall (98,800 EVs)](https://www.greencarreports.com/news/1144400_vw-recalling-98-800-id-4-evs-because-doors-could-open-unexpectedly)
-6. [What Car? — ID.4 reliability & common problems](https://www.whatcar.com/volkswagen/id4/estate/used-review/n25724/reliability)
-7. [Recharged — ID.4 common problems and fixes](https://recharged.com/articles/vw-id4-common-problems-and-fixes)
-8. [Recharged — ID.4 software update history](https://recharged.com/articles/vw-id4-software-update-history)
-9. [JD Power — 2023 ID.4 review](https://www.jdpower.com/cars/expert-reviews/2023-volkswagen-id-4-review-update)
-10. [CoPilot — most reliable ID.4 years](https://www.copilotsearch.com/posts/most-reliable-year-model-of-the-volkswagen-id4/)
+1. [Wikipedia (DE) — VW ID.4](https://de.wikipedia.org/wiki/VW_ID.4)
+2. [ev-database.org — VW ID.4 Pro](https://ev-database.org/car/1240/Volkswagen-ID4-Pro)
+3. [ADAC Autokatalog — VW ID.4 Pro](https://www.adac.de/rund-ums-fahrzeug/autokatalog/marken-modelle/vw/id4/1generation/332632/)
+4. [batterydesign.net — VW ID benchmarking](https://www.batterydesign.net/vw-benchmarking-id3-id4-id5-and-id-buzz/)
+5. [elektroauto-news.net — Türgriff-Rückruf 98.806](https://www.elektroauto-news.net/news/rueckruf-98806-vw-id4)
+6. [auto-motor-und-sport — ID.4 Türgriff-Rückruf](https://www.auto-motor-und-sport.de/elektroauto/vw-id-4-rueckruf-usa-tueren-oeffnen-beim-fahren/)
+7. [ecomento.de — MEB-Batterie-Rückruf 16271R/93MI](https://ecomento.de/2026/03/24/vw-muss-fast-100-000-meb-fahrzeuge-zurueckrufen/)
+8. [auto-motor-und-sport — fehlerhaftes Batteriemodul](https://www.auto-motor-und-sport.de/verkehr/rueckruf-der-meb-modelle-von-vw-ein-fehlerhaftes-batteriemodul/)
+9. [t-online — Rückruf Brandgefahr ID-Modelle](https://www.t-online.de/mobilitaet/aktuelles/id_101184306/vw-rueckruf-wegen-brandgefahr-id-3-id-4-id-5-id-buzz-cupra-born.html)
+10. [ADAC — TÜV-Report 2026](https://www.adac.de/news/tuev-report-2026/)
+11. [t-online — Gebrauchtwagen-Check ID.4/ID.5 TÜV](https://www.t-online.de/mobilitaet/aktuelles/id_101106978/gebrauchtwagen-check-vw-id-4-und-id-5-beim-tuev.html)
+12. [goingelectric.de — Gebrauchten ID.4 kaufen?](https://www.goingelectric.de/forum/viewtopic.php?t=91695)
+13. [carwiki.de — VW ID.4 Probleme](https://carwiki.de/vw-id-4-probleme)
+14. [MOTOR-TALK — Erfahrung ID.4 Pro Baujahr 2021/22](https://www.motor-talk.de/forum/erfahrung-mit-gebrauchtem-vw-id-4-pro-baujahr-2021-22-t8508196.html)
+15. [autobild.de — ID.4 Gebrauchtwagen-Test](https://www.autobild.de/artikel/vw-id.4-gebrauchtwagen-test-28555615.html)
 
 ## Revision log
-- 2026-06-01 — initial guide. Authored from targeted web verification (WebSearch) after
-  the deep-research workflow failed in its verify phase; claims cited inline. Re-runs
-  must enhance, not replace (see model_guides/README.md).
+- 2026-06-01 — initial guide (authored via targeted WebSearch after the deep-research
+  workflow failed in its verify phase).
+- 2026-06-01 — **scope narrowed to Germany (DE/LU/FR), € + German standards** per user.
+  Replaced US/UK framing (US recall codes, UK reliability surveys) with **KBA Rückrufe** (57J5;
+  new battery-fire **16271R/93MI**), **TÜV-Report 2026 + ADAC**, German used-€ pricing,
+  and software 3.0/3.2 guidance. No valid in-scope facts removed.
