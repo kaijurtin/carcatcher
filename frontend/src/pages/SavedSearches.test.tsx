@@ -26,6 +26,19 @@ function mockApi(list: SavedSearch[]) {
     if (url.endsWith("/api/saved-searches") && method === "POST") {
       return new Response(JSON.stringify({ ...existing, id: 2 }), { status: 201 });
     }
+    if (url.includes("/api/search/nl") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          query: "Audi A4",
+          filters: { make: "Audi", model: "A4" },
+          ranking: [],
+          rationale: "",
+          results: [],
+          total: 0,
+        }),
+        { status: 200 },
+      );
+    }
     if (url.includes("/run") && method === "POST") {
       return new Response(JSON.stringify({ status: "scheduled" }), { status: 202 });
     }
@@ -44,9 +57,8 @@ test("lists existing saved searches with criteria summary", async () => {
   expect(screen.getByRole("button", { name: /Run now/ })).toBeInTheDocument();
 });
 
-test("Run now posts to the run endpoint with the stored secret", async () => {
+test("Run now posts to the run endpoint without any secret header", async () => {
   const fetchSpy = mockApi([existing]);
-  localStorage.setItem("carcatcher_cron_secret", "s3cr3t");
   render(<SavedSearches />);
   await waitFor(() => screen.getByRole("button", { name: /Run now/ }));
   fireEvent.click(screen.getByRole("button", { name: /Run now/ }));
@@ -55,11 +67,11 @@ test("Run now posts to the run endpoint with the stored secret", async () => {
       fetchSpy.mock.calls.some(
         ([u, i]) =>
           String(u).includes("/run") &&
-          (i?.headers as Record<string, string>)?.["X-Cron-Secret"] === "s3cr3t",
+          i?.method === "POST" &&
+          !(i?.headers as Record<string, string> | undefined)?.["X-Cron-Secret"],
       ),
     ).toBe(true),
   );
-  localStorage.removeItem("carcatcher_cron_secret");
 });
 
 test("shows empty state when there are none", async () => {
@@ -70,19 +82,25 @@ test("shows empty state when there are none", async () => {
   );
 });
 
-test("submitting the form posts a new search", async () => {
+test("submitting a text query translates then posts a new search", async () => {
   const fetchSpy = mockApi([]);
   render(<SavedSearches />);
   await waitFor(() => screen.getByText(/No saved searches yet/));
-  fireEvent.change(screen.getByPlaceholderText("VW Golf budget"), {
+  fireEvent.change(screen.getByLabelText(/Search query/), {
     target: { value: "Audi A4" },
   });
+  fireEvent.change(screen.getByLabelText(/Name/), {
+    target: { value: "A4 deals" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /Add search/ }));
-  await waitFor(() =>
+  await waitFor(() => {
+    const calls = fetchSpy.mock.calls;
+    // translate first, then create
+    expect(calls.some(([u]) => String(u).includes("/api/search/nl"))).toBe(true);
     expect(
-      fetchSpy.mock.calls.some(
+      calls.some(
         ([u, i]) => String(u).endsWith("/api/saved-searches") && i?.method === "POST",
       ),
-    ).toBe(true),
-  );
+    ).toBe(true);
+  });
 });

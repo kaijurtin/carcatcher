@@ -125,6 +125,10 @@ export async function updateSavedSearch(
   return (await resp.json()) as SavedSearch;
 }
 
+export function duplicateSavedSearch(id: number): Promise<SavedSearch> {
+  return apiPost<SavedSearch>(`/saved-searches/${id}/duplicate`, {});
+}
+
 export async function deleteSavedSearch(id: number): Promise<void> {
   const resp = await fetch(`${BASE}/saved-searches/${id}`, { method: "DELETE" });
   if (!resp.ok && resp.status !== 204) {
@@ -132,17 +136,10 @@ export async function deleteSavedSearch(id: number): Promise<void> {
   }
 }
 
-export async function runSavedSearch(
-  id: number,
-  secret: string,
-): Promise<RefreshResult> {
-  const resp = await fetch(`${BASE}/saved-searches/${id}/run`, {
-    method: "POST",
-    headers: { "X-Cron-Secret": secret },
-  });
+export async function runSavedSearch(id: number): Promise<RefreshResult> {
+  const resp = await fetch(`${BASE}/saved-searches/${id}/run`, { method: "POST" });
   if (resp.status === 202) return "scheduled";
   if (resp.status === 409) return "running";
-  if (resp.status === 401) return "unauthorized";
   return "error";
 }
 
