@@ -1,8 +1,9 @@
 """AutoScout24.de scraper (source: "autoscout24").
 
 AS24 is a Next.js app: the search results are in the __NEXT_DATA__ JSON
-(props.pageProps.listings) with fully structured fields. We parse that JSON rather
-than the DOM — robust, and it makes Haiku normalization unnecessary for this source.
+(props.pageProps.listings) with structured fields. We parse that JSON rather than the
+DOM (robust) and use it as a seed via basic_specs; the agent (P2) still decides
+make/model/variant from the announcement text so the model facet stays agent-decided.
 """
 
 from __future__ import annotations
@@ -181,7 +182,10 @@ def build_search_url(filters: StructuredFilters, page: int = 1) -> str:
 class AutoScout24Scraper(Scraper):
     name = SOURCE
     base_url = BASE_URL
-    provides_structured_data = True
+    # The __NEXT_DATA__ fields are still used as a seed via basic_specs, but the agent
+    # (P2) decides make/model/variant from the announcement text so the dashboard model
+    # facet is agent-categorized consistently across all sources.
+    provides_structured_data = False
 
     def __init__(self, firecrawl: FirecrawlClient) -> None:
         self._fc = firecrawl

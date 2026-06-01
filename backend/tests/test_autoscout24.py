@@ -41,8 +41,9 @@ def test_structured_specs_populated():
     assert specs["location_plz"] == "71154"
 
 
-def test_scraper_is_structured_source():
-    assert AutoScout24Scraper.provides_structured_data is True
+def test_scraper_defers_model_to_agent():
+    # AS24 fields seed basic_specs, but the agent decides make/model/variant from text.
+    assert AutoScout24Scraper.provides_structured_data is False
 
 
 def test_build_search_url():

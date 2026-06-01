@@ -1,12 +1,15 @@
 """mobile.de scraper (source: "mobilede").
 
-mobile.de is behind DataDome, so in production the page is fetched + rendered by
-Firecrawl. We parse schema.org JSON-LD (Car/Vehicle items, optionally wrapped in an
-ItemList) — a stable, standards-based structure. Haiku still runs to fill any gaps
-from the description (non-destructive).
+mobile.de is a React/loadable SSR app behind DataDome; in production Firecrawl
+renders it. The search results live in **window.__INITIAL_STATE__** at
+`search.srp.data.searchResults.items` — there is NO vehicle JSON-LD (only org/
+breadcrumb), which is why an earlier JSON-LD parser found nothing.
 
-NOTE: the exact JSON-LD payload should be validated against a live Firecrawl fetch
-on first deploy; parsing is isolated here for a one-file fix if the shape differs.
+We extract the cheap card fields (price/year/mileage/power/fuel/transmission/location/
+seller) deterministically from each item's `attr`, and provide `make`/`model` as a
+seed. `provides_structured_data = False`, so the agent (P2 normalization) reads the
+announcement text and decides make/model/variant — that agent-decided model is what
+drives the dashboard model facet. Make targeting uses `ms=<makeId>`.
 """
 
 from __future__ import annotations
@@ -16,8 +19,7 @@ import logging
 import re
 from collections.abc import AsyncIterator
 
-from bs4 import BeautifulSoup
-
+from carcatcher.normalization.makes import canonical_make
 from carcatcher.scraping.base import ListingStub, RawPage, Scraper
 from carcatcher.scraping.firecrawl_client import FirecrawlClient
 from carcatcher.schemas import StructuredFilters
@@ -28,21 +30,24 @@ SOURCE = "mobilede"
 BASE_URL = "https://suchen.mobile.de"
 
 _ID_RE = re.compile(r"[?&]id=(\d+)")
-_VEHICLE_TYPES = {"Car", "Vehicle", "Product", "MotorizedVehicle"}
+
+# Verified mobile.de make IDs (URL param `ms=<makeId>`). German-market makes.
+_MAKE_IDS = {
+    "volkswagen": 25200, "audi": 1900, "bmw": 3500, "mercedes-benz": 17200,
+    "opel": 19000, "ford": 9000, "skoda": 22900, "seat": 22500, "cupra": 3,
+    "renault": 20700, "peugeot": 19300, "fiat": 8800, "dacia": 6600,
+    "hyundai": 11600, "kia": 13200, "tesla": 135, "toyota": 24100,
+    "nissan": 18700, "volvo": 25100, "mazda": 16800, "mini": 17500,
+}
 
 _FUEL_MAP = {
-    "benzin": "petrol", "petrol": "petrol", "diesel": "diesel",
-    "elektro": "electric", "electric": "electric", "hybrid": "hybrid",
-    "autogas": "lpg", "lpg": "lpg", "erdgas": "cng", "cng": "cng",
+    "benzin": "petrol", "diesel": "diesel", "elektro": "electric",
+    "hybrid": "hybrid", "autogas": "lpg", "lpg": "lpg", "erdgas": "cng", "cng": "cng",
 }
 _TRANSMISSION_MAP = {
-    "manuell": "manual", "schaltgetriebe": "manual", "manual": "manual",
-    "automatik": "automatic", "automatic": "automatic",
+    "manuell": "manual", "schaltgetriebe": "manual",
+    "automatik": "automatic", "halbautomatik": "automatic",
 }
-
-
-def _map(table: dict, value) -> str | None:
-    return table.get(str(value).strip().lower()) if value else None
 
 
 def _to_int(value) -> int | None:
@@ -52,106 +57,152 @@ def _to_int(value) -> int | None:
     return int(digits) if digits else None
 
 
-def _iter_vehicles(node) -> list[dict]:
-    """Collect Car/Vehicle dicts from arbitrary JSON-LD (handles ItemList)."""
-    found: list[dict] = []
-
-    def visit(o):
-        if isinstance(o, dict):
-            t = o.get("@type")
-            types = t if isinstance(t, list) else [t]
-            if any(x in _VEHICLE_TYPES for x in types):
-                found.append(o)
-            for v in o.values():
-                visit(v)
-        elif isinstance(o, list):
-            for v in o:
-                visit(v)
-
-    visit(node)
-    return found
+def _map(table: dict, value) -> str | None:
+    return table.get(str(value).strip().lower()) if value else None
 
 
-def _vehicle_to_stub(item: dict) -> ListingStub | None:
-    url = item.get("url") or item.get("@id") or ""
-    if not url:
+def _year(fr: str | None) -> int | None:
+    # "05/2018" -> 2018
+    if not fr:
         return None
-    m = _ID_RE.search(url)
-    source_id = m.group(1) if m else url.rstrip("/").rsplit("/", 1)[-1]
+    m = re.search(r"(\d{4})", str(fr))
+    return int(m.group(1)) if m else None
 
-    offers = item.get("offers") or {}
-    if isinstance(offers, list):
-        offers = offers[0] if offers else {}
-    place = (offers.get("availableAtOrFrom") or {}) if isinstance(offers, dict) else {}
-    address = place.get("address") or {} if isinstance(place, dict) else {}
-    seller = offers.get("seller") or {} if isinstance(offers, dict) else {}
-    seller_type = (
-        "dealer" if str(seller.get("@type", "")).lower() in {"autodealer", "organization"}
-        else "private" if str(seller.get("@type", "")).lower() == "person"
-        else None
-    )
-    odo = item.get("mileageFromOdometer") or {}
-    mileage = _to_int(odo.get("value") if isinstance(odo, dict) else odo)
-    brand = item.get("brand") or {}
-    make = brand.get("name") if isinstance(brand, dict) else brand
-    price = _to_int(offers.get("price") if isinstance(offers, dict) else None)
-    image = item.get("image")
-    if isinstance(image, list):
-        image = image[0] if image else None
+
+def _power_kw(pw: str | None) -> int | None:
+    # "85 kW (116 PS)" -> 85
+    if not pw:
+        return None
+    m = re.search(r"(\d+)\s*kW", str(pw))
+    return int(m.group(1)) if m else None
+
+
+def _seller(type_localized: str | None) -> str | None:
+    t = (type_localized or "").strip().lower()
+    if t.startswith("händler") or t.startswith("haendler"):
+        return "dealer"
+    if t.startswith("privat"):
+        return "private"
+    return None
+
+
+def extract_initial_state(html: str) -> str | None:
+    """Return the JSON text of `window.__INITIAL_STATE__ = {...}` (brace-matched)."""
+    i = html.find("__INITIAL_STATE__")
+    if i < 0:
+        return None
+    j = html.find("=", i) + 1
+    while j < len(html) and html[j] in " \n\t\r":
+        j += 1
+    if j >= len(html) or html[j] != "{":
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for k in range(j, len(html)):
+        c = html[k]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        else:
+            if c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return html[j:k + 1]
+    return None
+
+
+def _item_to_stub(item: dict) -> ListingStub | None:
+    if not isinstance(item, dict) or item.get("isEyeCatcher") or not item.get("id"):
+        return None
+    rel = item.get("relativeUrl") or ""
+    url = rel if rel.startswith("http") else f"{BASE_URL}{rel}"
+    attr = item.get("attr") or {}
+    price = item.get("price") or {}
+    price_amount = price.get("grossAmount")
+    image = (item.get("previewImage") or {}).get("src")
+    contact = item.get("contactInfo") or {}
+    make = item.get("make")
+    model = item.get("model")
+    title = item.get("title") or " ".join(p for p in (make, model) if p)
+    sub = item.get("subTitle")
 
     stub = ListingStub(
         source=SOURCE,
-        source_id=str(source_id),
+        source_id=str(item["id"]),
         url=url,
-        title=item.get("name") or f"{make or ''} {item.get('model') or ''}".strip(),
-        price_hint=f"{price} €" if price else None,
-        location_hint=" ".join(
-            p for p in (address.get("postalCode"), address.get("addressLocality")) if p
-        ) or None,
+        title=title,
+        price_hint=price.get("gross") or (f"{price_amount} €" if price_amount else None),
+        location_hint=" ".join(p for p in (attr.get("z"), attr.get("loc")) if p) or None,
         image_hint=image,
         tags=[t for t in (
-            f"{mileage} km" if mileage else None,
-            f"EZ {item.get('vehicleModelDate')}" if item.get("vehicleModelDate") else None,
-            item.get("fuelType"),
+            attr.get("ml"),
+            f"EZ {attr['fr']}" if attr.get("fr") else None,
+            attr.get("ft"),
         ) if t],
-        description_hint=item.get("description") or item.get("name"),
+        description_hint=" · ".join(p for p in (title, sub) if p) or title,
     )
     stub._mde = {  # type: ignore[attr-defined]
-        "price": price,
-        "make": make,
-        "model": item.get("model"),
-        "mileage_km": mileage,
-        "year": _to_int(item.get("vehicleModelDate")),
-        "fuel": _map(_FUEL_MAP, item.get("fuelType")),
-        "transmission": _map(_TRANSMISSION_MAP, item.get("vehicleTransmission")),
-        "seller_type": seller_type,
-        "location_city": address.get("addressLocality"),
-        "location_plz": address.get("postalCode"),
+        "price": _to_int(price_amount),
+        "make": canonical_make(make),
+        "model": model,
+        "year": _year(attr.get("fr")),
+        "mileage_km": _to_int(attr.get("ml")),
+        "power_kw": _power_kw(attr.get("pw")),
+        "fuel": _map(_FUEL_MAP, attr.get("ft")),
+        "transmission": _map(_TRANSMISSION_MAP, attr.get("tr")),
+        "seller_type": _seller(contact.get("typeLocalized")),
+        "location_city": attr.get("loc"),
+        "location_plz": attr.get("z"),
     }
     return stub
 
 
 def parse_search_html(html: str) -> list[ListingStub]:
-    soup = BeautifulSoup(html, "html.parser")
+    state = extract_initial_state(html)
+    if not state:
+        return []
+    try:
+        data = json.loads(state)
+    except json.JSONDecodeError:
+        return []
+    try:
+        items = data["search"]["srp"]["data"]["searchResults"]["items"]
+    except (KeyError, TypeError):
+        return []
     stubs: list[ListingStub] = []
     seen: set[str] = set()
-    for node in soup.find_all("script", type="application/ld+json"):
-        if not node.string:
-            continue
-        try:
-            data = json.loads(node.string)
-        except json.JSONDecodeError:
-            continue
-        for vehicle in _iter_vehicles(data):
-            stub = _vehicle_to_stub(vehicle)
-            if stub and stub.source_id not in seen:
-                seen.add(stub.source_id)
-                stubs.append(stub)
+    for item in items or []:
+        stub = _item_to_stub(item)
+        if stub and stub.source_id not in seen:
+            seen.add(stub.source_id)
+            stubs.append(stub)
     return stubs
+
+
+def _make_id(make: str | None) -> int | None:
+    if not make:
+        return None
+    mid = _MAKE_IDS.get(make.strip().lower())
+    if mid is None:
+        cm = canonical_make(make)  # VW -> Volkswagen, etc.
+        mid = _MAKE_IDS.get((cm or "").strip().lower())
+    return mid
 
 
 def build_search_url(filters: StructuredFilters, page: int = 1) -> str:
     params = [("isSearchRequest", "true"), ("s", "Car"), ("vc", "Car"), ("pageNumber", str(page))]
+    mid = _make_id(filters.make)
+    if mid is not None:
+        params.append(("ms", str(mid)))  # make targeting (model IDs are per-make; not used)
     if filters.price_min is not None:
         params.append(("price:from", str(filters.price_min)))
     if filters.price_max is not None:
@@ -167,7 +218,7 @@ def build_search_url(filters: StructuredFilters, page: int = 1) -> str:
 class MobileDeScraper(Scraper):
     name = SOURCE
     base_url = BASE_URL
-    provides_structured_data = False  # JSON-LD may be partial; let Haiku supplement
+    provides_structured_data = False  # agent decides make/model/variant from the text
 
     def __init__(self, firecrawl: FirecrawlClient) -> None:
         self._fc = firecrawl
@@ -178,9 +229,8 @@ class MobileDeScraper(Scraper):
         for page in range(1, max_pages + 1):
             url = build_search_url(filters, page)
             try:
-                data = await self._fc.scrape(
-                    url, formats=["rawHtml"], only_main_content=False
-                )
+                # rawHtml preserves the inline __INITIAL_STATE__ script.
+                data = await self._fc.scrape(url, formats=["rawHtml"], only_main_content=False)
             except Exception as exc:  # noqa: BLE001 — transient page error shouldn't fail the run
                 logger.warning("mobilede page %s failed, stopping paging: %s", page, exc)
                 break
