@@ -28,21 +28,22 @@ def test_enabled_create_and_toggle(client):
     assert r.json()["enabled"] is True
 
 
-# --- /run endpoint ---------------------------------------------------------- #
-def test_run_endpoint_requires_secret(client):
+# --- /run endpoint (manual run needs no secret) ----------------------------- #
+def test_run_endpoint_needs_no_secret(client, monkeypatch):
+    async def fake_run_search(search_id, **kwargs):
+        return None
+
+    monkeypatch.setattr(ss_mod, "run_search", fake_run_search)
     with Session(get_engine()) as s:
         s.add(SavedSearch(name="x"))
         s.commit()
-    assert client.post("/api/saved-searches/1/run").status_code == 401
-    assert client.post(
-        "/api/saved-searches/1/run", headers={"X-Cron-Secret": "wrong"}
-    ).status_code == 401
+    resp = client.post("/api/saved-searches/1/run")  # no X-Cron-Secret header
+    assert resp.status_code == 202
+    assert resp.json()["status"] == "scheduled"
 
 
 def test_run_endpoint_404_missing(client):
-    assert client.post(
-        "/api/saved-searches/999/run", headers={"X-Cron-Secret": "test-secret"}
-    ).status_code == 404
+    assert client.post("/api/saved-searches/999/run").status_code == 404
 
 
 def test_run_endpoint_409_when_running(client):
@@ -50,22 +51,7 @@ def test_run_endpoint_409_when_running(client):
         s.add(SavedSearch(name="x"))
         s.add(CrawlRun(source="x", status=RunStatus.RUNNING.value))
         s.commit()
-    resp = client.post("/api/saved-searches/1/run", headers={"X-Cron-Secret": "test-secret"})
-    assert resp.status_code == 409
-
-
-def test_run_endpoint_202_schedules(client, monkeypatch):
-    called = {}
-
-    async def fake_run_search(search_id, **kwargs):
-        called["id"] = search_id
-
-    monkeypatch.setattr(ss_mod, "run_search", fake_run_search)
-    with Session(get_engine()) as s:
-        s.add(SavedSearch(name="x"))
-        s.commit()
-    resp = client.post("/api/saved-searches/1/run", headers={"X-Cron-Secret": "test-secret"})
-    assert resp.status_code == 202
+    assert client.post("/api/saved-searches/1/run").status_code == 409
 
 
 # --- cascade delete --------------------------------------------------------- #
