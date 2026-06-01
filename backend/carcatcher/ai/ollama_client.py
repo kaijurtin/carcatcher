@@ -21,7 +21,7 @@ import logging
 import httpx
 
 from carcatcher.ai.client import AIDisabledError, StructuredResult
-from carcatcher.ai.models import Usage
+from carcatcher.ai.models import SPECS, Usage
 from carcatcher.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,10 @@ class OllamaClient:
         ollama_model = self._s.ollama_model or model
         url = f"{self._s.ollama_base_url.rstrip('/')}/chat/completions"
         system = cached_system + "\n\n" + _json_instruction(tool_schema)
+        # Size the output budget by the role's Anthropic tier (HAIKU/SONNET/OPUS):
+        # evaluate/recommend need more than the extractor or their JSON truncates.
+        spec = SPECS.get(model)
+        max_toks = max_tokens or (spec.max_tokens if spec else _DEFAULT_MAX_TOKENS)
         payload: dict = {
             "model": ollama_model,
             "temperature": 0,
@@ -79,7 +83,7 @@ class OllamaClient:
                 {"role": "user", "content": user_text},
             ],
             "response_format": {"type": "json_object"},
-            "max_tokens": max_tokens or _DEFAULT_MAX_TOKENS,
+            "max_tokens": max_toks,
         }
 
         client = self._get_client()

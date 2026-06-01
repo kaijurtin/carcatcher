@@ -7,6 +7,7 @@ import json
 import pytest
 
 from carcatcher.ai.client import AIClient, AIDisabledError
+from carcatcher.ai.models import OPUS, SONNET
 from carcatcher.ai.ollama_client import OllamaClient
 from carcatcher.app_state import build_state
 from carcatcher.config import Settings
@@ -137,20 +138,32 @@ def test_enabled_true_only_for_ollama_provider_and_not_disabled():
     assert OllamaClient(_ollama_settings(ai_provider="anthropic")).enabled is False
 
 
-def test_build_state_uses_ollama_for_extractor_only():
+def test_build_state_uses_ollama_for_all_roles():
     settings = _ollama_settings()
     state = build_state(settings)
 
-    # Extractor runs locally; everything else stays on the Anthropic client.
-    assert isinstance(state.extractor._ai, OllamaClient)
+    # All four AI roles run locally; AIClient is still built but unused.
     assert isinstance(state.ai, AIClient)
-    assert state.evaluator._ai is state.ai
+    for role in (state.extractor, state.evaluator, state.translator, state.recommender):
+        assert isinstance(role._ai, OllamaClient)
 
 
-def test_build_state_uses_anthropic_extractor_by_default():
+def test_build_state_uses_anthropic_for_all_roles_by_default():
     settings = Settings(
         scheduler_enabled=False, ai_disabled=False, scrape_min_interval_ms=0,
     )
     state = build_state(settings)
-    assert isinstance(state.extractor._ai, AIClient)
-    assert state.extractor._ai is state.ai
+    for role in (state.extractor, state.evaluator, state.translator, state.recommender):
+        assert role._ai is state.ai
+
+
+async def test_max_tokens_sized_by_role_tier():
+    # The role passes its Anthropic model id; OllamaClient sizes the budget from SPECS.
+    for model, expected in [(SONNET, 1536), (OPUS, 2048)]:
+        fake = _FakeAsyncClient(_chat_completion({"make": "VW"}))
+        ollama = OllamaClient(_ollama_settings(), client=fake)
+        await ollama.extract_structured(
+            model=model, cached_system="s", user_text="u",
+            tool_name="t", tool_schema=NORMALIZED_TOOL_SCHEMA,
+        )
+        assert fake.last_call["json"]["max_tokens"] == expected

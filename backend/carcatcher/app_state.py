@@ -43,19 +43,19 @@ def build_state(settings: Settings | None = None) -> AppState:
     firecrawl = FirecrawlClient(settings)
     scrapers = build_registry(firecrawl)
     ai = AIClient(settings)
-    # Only the normalization/extractor step is pluggable; everything else
-    # (evaluator, translator, recommender) stays on the hosted Anthropic client.
-    extractor_client = (
-        OllamaClient(settings) if settings.ai_provider == "ollama" else ai
-    )
+    # AI provider is pluggable across ALL roles. ai_provider=ollama routes
+    # normalize/evaluate/translate/recommend to a local OpenAI-compatible model
+    # (fully offline, $0); anthropic keeps the hosted client. `ai` is always built
+    # so `state.ai` and a flip back to anthropic keep working.
+    provider = OllamaClient(settings) if settings.ai_provider == "ollama" else ai
     return AppState(
         firecrawl=firecrawl,
         scrapers=scrapers,
         ai=ai,
-        extractor=Extractor(extractor_client),
-        evaluator=Evaluator(ai),
-        translator=Translator(ai),
-        recommender=Recommender(ai),
+        extractor=Extractor(provider),
+        evaluator=Evaluator(provider),
+        translator=Translator(provider),
+        recommender=Recommender(provider),
     )
 
 
