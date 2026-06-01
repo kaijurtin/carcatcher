@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from carcatcher.api.routes import (
     health,
     listings,
+    models as models_routes,
     recommend,
     refresh,
     saved_searches,
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(recommend.router, prefix="/api")
     app.include_router(saved_searches.router, prefix="/api")
     app.include_router(settings_routes.router, prefix="/api")
+    app.include_router(models_routes.router, prefix="/api")
     return app
 
 

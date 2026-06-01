@@ -112,6 +112,20 @@ export interface AppSettings {
   ai_configured: boolean;
 }
 
+export interface ModelGuideSummary {
+  make: string | null;
+  model: string | null;
+  title: string;
+  updated: string | null;
+}
+
+export interface ModelGuide {
+  make: string | null;
+  model: string | null;
+  front_matter: Record<string, string>;
+  markdown: string;
+}
+
 export interface NlSearchResponse {
   query: string;
   filters: Record<string, unknown>;

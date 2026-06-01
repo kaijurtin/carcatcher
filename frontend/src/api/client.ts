@@ -2,6 +2,8 @@
 
 import type {
   AppSettings,
+  ModelGuide,
+  ModelGuideSummary,
   ListingsPage,
   ListingQuery,
   CrawlRun,
@@ -93,6 +95,16 @@ export function getRuns(limit = 10): Promise<CrawlRun[]> {
 
 export function getSettings(): Promise<AppSettings> {
   return apiGet<AppSettings>("/settings");
+}
+
+export function getModelGuides(): Promise<ModelGuideSummary[]> {
+  return apiGet<ModelGuideSummary[]>("/models");
+}
+
+export function getModelGuide(make: string, model: string): Promise<ModelGuide> {
+  return apiGet<ModelGuide>(
+    `/models/${encodeURIComponent(make)}/${encodeURIComponent(model)}/research`,
+  );
 }
 
 export async function setAiEnabled(enabled: boolean): Promise<AppSettings> {

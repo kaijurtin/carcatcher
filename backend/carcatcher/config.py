@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,12 +36,17 @@ class Settings(BaseSettings):
     ai_monthly_budget_usd: float = 25.0
     haiku_concurrency: int = 5
 
-    # --- AI provider selection (normalization/extractor only) ---
-    # "anthropic" uses the hosted Claude wrapper; "ollama" runs the
-    # categorization/normalization step against a local Ollama model.
+    # --- AI provider selection (all roles) ---
+    # "anthropic" uses the hosted Claude wrapper; "ollama" routes every AI role
+    # (normalize/evaluate/translate/recommend) to a local Ollama model.
     ai_provider: str = "anthropic"
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "qwen2.5:3b"
+
+    # --- Model guides (researched .md, served read-only) ---
+    # Empty -> repo-bundled backend/model_guides (see `guides_dir`); override with
+    # MODEL_GUIDES_DIR to serve from e.g. the /data volume.
+    model_guides_dir: str = ""
 
     # --- Scoring ---
     min_comps: int = 5
@@ -63,6 +70,13 @@ class Settings(BaseSettings):
     @property
     def crawl_sources_list(self) -> list[str]:
         return [s.strip() for s in self.crawl_sources.split(",") if s.strip()]
+
+    @property
+    def guides_dir(self) -> Path:
+        """Directory holding model-guide .md files (repo-bundled by default)."""
+        if self.model_guides_dir:
+            return Path(self.model_guides_dir)
+        return Path(__file__).resolve().parent.parent / "model_guides"
 
 
 _settings: Settings | None = None

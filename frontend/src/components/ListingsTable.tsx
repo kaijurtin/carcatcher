@@ -1,5 +1,5 @@
 import type { Listing } from "../types";
-import { formatKm, formatPrice, formatYear } from "../lib/format";
+import { formatKm, formatKmPerYear, formatPrice, formatYear } from "../lib/format";
 import { DealScoreBadge } from "./DealScoreBadge";
 
 export const SOURCE_LABEL: Record<string, string> = {
@@ -80,6 +80,7 @@ export function ListingsTable({
             <th className="px-4 py-3 font-medium">Deal</th>
             <th className="px-4 py-3 font-medium">Year</th>
             <th className="px-4 py-3 font-medium">Mileage</th>
+            <th className="px-4 py-3 font-medium">km/Jahr</th>
             <th className="px-4 py-3 font-medium">Battery</th>
             <th className="px-4 py-3 font-medium">SoH</th>
             <th className="px-4 py-3 font-medium">Location</th>
@@ -151,6 +152,9 @@ export function ListingsTable({
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                 {formatKm(l.mileage_km)}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                {formatKmPerYear(l.mileage_km, l.year)}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                 {l.battery_kwh ? `${l.battery_kwh} kWh` : "—"}

@@ -56,6 +56,18 @@ test("renders a row with formatted price, year and mileage", () => {
   expect(screen.getByText(/112\.000\s*km/)).toBeInTheDocument();
 });
 
+test("renders km/Jahr (annualized mileage) and em dash when year missing", () => {
+  const fourYearsAgo = new Date().getFullYear() - 4;
+  const { rerender } = render(
+    <ListingsTable items={[listing({ mileage_km: 100000, year: fourYearsAgo })]} />,
+  );
+  expect(screen.getByText("25.000/Jahr")).toBeInTheDocument(); // 100000 / 4
+
+  rerender(<ListingsTable items={[listing({ mileage_km: 100000, year: null })]} />);
+  // With year null there is no km/Jahr value — a dash is shown instead.
+  expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+});
+
 test("falls back to raw title when make/model missing", () => {
   render(
     <ListingsTable

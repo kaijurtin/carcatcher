@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { getHealth } from "./api/client";
 import { Dashboard } from "./pages/Dashboard";
 import { SavedSearches } from "./pages/SavedSearches";
+import { ModelGuides } from "./pages/ModelGuides";
 
 type HealthState = "checking" | "ok" | "down";
-type View = "dashboard" | "searches";
+type View = "dashboard" | "searches" | "models";
 
 export default function App() {
   const [health, setHealth] = useState<HealthState>("checking");
@@ -29,13 +30,16 @@ export default function App() {
             <nav className="flex gap-1">
               <NavTab label="Dashboard" active={view === "dashboard"} onClick={() => setView("dashboard")} />
               <NavTab label="Saved searches" active={view === "searches"} onClick={() => setView("searches")} />
+              <NavTab label="Model guides" active={view === "models"} onClick={() => setView("models")} />
             </nav>
           </div>
           <HealthPill state={health} />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
-        {view === "dashboard" ? <Dashboard /> : <SavedSearches />}
+        {view === "dashboard" && <Dashboard />}
+        {view === "searches" && <SavedSearches />}
+        {view === "models" && <ModelGuides />}
       </main>
     </div>
   );
