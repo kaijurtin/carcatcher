@@ -75,6 +75,7 @@ export function ListingsTable({
           <tr>
             {favoritable && <th className="w-8 px-2 py-3" />}
             {selectable && <th className="w-10 px-4 py-3" />}
+            <th className="px-4 py-3 font-medium">#</th>
             <th className="px-4 py-3 font-medium">Model</th>
             <th className="px-4 py-3 font-medium">Price</th>
             <th className="px-4 py-3 font-medium">Deal</th>
@@ -123,6 +124,9 @@ export function ListingsTable({
                   />
                 </td>
               )}
+              <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-400">
+                #{l.id}
+              </td>
               <td className="max-w-md px-4 py-3">
                 <span className="flex items-center gap-2">
                   <span className="line-clamp-1 font-medium text-slate-900">

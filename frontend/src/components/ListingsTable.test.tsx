@@ -48,6 +48,11 @@ test("renders empty state when no items", () => {
   expect(screen.getByText(/No listings yet/)).toBeInTheDocument();
 });
 
+test("renders the stable listing id as a #number", () => {
+  render(<ListingsTable items={[listing({ id: 1103 })]} />);
+  expect(screen.getByText("#1103")).toBeInTheDocument();
+});
+
 test("renders a row with formatted price, year and mileage", () => {
   render(<ListingsTable items={[listing({})]} />);
   expect(screen.getByText("Volkswagen Golf")).toBeInTheDocument();

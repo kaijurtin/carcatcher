@@ -69,6 +69,11 @@ export function ListingDetailDrawer({
       <aside className="relative z-50 flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
         <header className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
           <h3 className="pr-6 text-lg font-semibold text-slate-900">
+            {listing && (
+              <span className="mr-2 font-mono text-xs font-normal text-slate-400">
+                #{listing.id}
+              </span>
+            )}
             {listing
               ? listing.make && listing.model
                 ? `${listing.make} ${listing.model} ${listing.variant ?? ""}`
