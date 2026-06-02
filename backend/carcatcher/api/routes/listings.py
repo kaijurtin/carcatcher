@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import asc, desc
 from sqlmodel import Session, func, select
 
@@ -63,6 +63,13 @@ class ListingRead(BaseModel):
     location_plz: str | None
     seller_type: str | None
     model_locked: bool = False
+
+    @field_validator("model_locked", mode="before")
+    @classmethod
+    def _coerce_model_locked(cls, v) -> bool:
+        # A column added via ALTER on existing rows can be NULL → treat as False.
+        return bool(v)
+
     fair_price_estimate: int | None
     deal_score: float | None
     comp_count: int | None

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
+from carcatcher.api.routes.listings import ListingRead
 from carcatcher.db.engine import get_engine
 from carcatcher.db.models import Listing
 from carcatcher.normalization.model_categorizer import apply_categorization
@@ -33,6 +34,17 @@ def test_patch_sets_model_and_locks(client):
 
     with Session(get_engine()) as s:
         assert s.get(Listing, lid).model == "ID.5 GTX"
+
+
+def test_listing_read_coerces_null_model_locked(client):
+    # Regression: a column added via ALTER on existing prod rows reads as NULL;
+    # ListingRead must coerce NULL model_locked -> False instead of 500-ing /api/listings.
+    with Session(get_engine()) as s:
+        lid = _seed(s)
+        li = s.get(Listing, lid)
+        li.model_locked = None  # simulate the ALTER-added NULL value
+        out = ListingRead.model_validate(li)
+        assert out.model_locked is False
 
 
 def test_patch_404_for_missing_listing(client):

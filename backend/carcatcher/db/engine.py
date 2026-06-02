@@ -47,7 +47,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "listing": {
         "battery_kwh": "FLOAT",
         "battery_soh_pct": "INTEGER",
-        "model_locked": "BOOLEAN",
+        "model_locked": "BOOLEAN NOT NULL DEFAULT 0",
     },
 }
 
