@@ -238,7 +238,7 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
             {nl ? nl.total : (data?.total ?? 0)} found
           </span>
         </h2>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
           {picked.size > 0 && (
             <button
               onClick={getRecommendation}

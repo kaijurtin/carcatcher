@@ -54,10 +54,13 @@ class Settings(BaseSettings):
     max_sonnet_evals_per_run: int = 30
 
     # --- Scheduler / snapshot ---
-    scheduler_enabled: bool = True
+    # Manual-only by default: no autonomous crawling. Crawls run only when
+    # triggered from the dashboard ("Crawl now") or POST /api/refresh. Set
+    # SCHEDULER_ENABLED=true to re-enable the autonomous cron below.
+    scheduler_enabled: bool = False
     # Comma-separated sources crawled each run (must be registered scrapers).
     crawl_sources: str = "kleinanzeigen,autoscout24,mobilede"
-    cron_schedule: str = "0 */3 * * *"  # every 3 hours
+    cron_schedule: str = "0 */3 * * *"  # every 3 hours (only when scheduler_enabled)
     cron_secret: str = "change-me"
     run_timeout_minutes: int = 30
     prune_gone_days: int = 14

@@ -76,7 +76,7 @@ export function RefreshControls({ onComplete }: { onComplete?: () => void }) {
         disabled={busy}
         className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        {busy ? "Crawling…" : "Refresh"}
+        {busy ? "Crawling…" : "Crawl now"}
       </button>
       {message && <span className="text-xs text-rose-600">{message}</span>}
     </div>

@@ -26,7 +26,7 @@ function mockFetch(refreshStatus = 202) {
 test("renders the refresh button and empty run state", async () => {
   mockFetch();
   render(<RefreshControls />);
-  expect(screen.getByRole("button", { name: /Refresh/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Crawl now/ })).toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByText(/No crawls yet/)).toBeInTheDocument(),
   );
@@ -37,7 +37,7 @@ test("prompts for a secret when none stored, then triggers refresh", async () =>
   vi.spyOn(window, "prompt").mockReturnValue("s3cr3t");
 
   render(<RefreshControls />);
-  fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Crawl now/ }));
 
   await waitFor(() =>
     expect(localStorage.getItem("carcatcher_cron_secret")).toBe("s3cr3t"),
@@ -54,7 +54,7 @@ test("does nothing when the secret prompt is cancelled", async () => {
   vi.spyOn(window, "prompt").mockReturnValue(null);
 
   render(<RefreshControls />);
-  fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Crawl now/ }));
 
   // No refresh call should be made.
   await waitFor(() =>
