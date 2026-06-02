@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     ai_disabled: bool = False
     ai_monthly_budget_usd: float = 25.0
     haiku_concurrency: int = 5
+    # Guide-aware variant categorization: when a VW ID model is recognized but the
+    # variant can't be resolved deterministically, ask Haiku to pick it using the
+    # model guide's variant/year knowledge. Off -> falls back to deterministic only.
+    guide_categorizer_enabled: bool = True
 
     # --- AI provider selection (all roles) ---
     # "anthropic" uses the hosted Claude wrapper; "ollama" routes every AI role

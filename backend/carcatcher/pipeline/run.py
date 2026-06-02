@@ -173,7 +173,11 @@ async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | Non
     -> recompute status -> normalize -> score -> evaluate -> prune, under a lock,
     recorded in a CrawlRun. Returns the run id, or None if skipped."""
     from carcatcher.app_state import get_state
-    from carcatcher.pipeline.categorize import categorize_active
+    from carcatcher.pipeline.categorize import (
+        AgentCategorizeStats,
+        agent_categorize_active,
+        categorize_active,
+    )
     from carcatcher.pipeline.evaluate import EvalStats, evaluate_candidates
     from carcatcher.pipeline.normalize import NormalizeStats, normalize_pending
     from carcatcher.pipeline.score import score_active
@@ -223,6 +227,15 @@ async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | Non
                     else NormalizeStats(skipped=True)
                 )
                 categorize_active(session)  # P4.5: deterministic model rules, no AI
+                # P4.6: guide-aware agent resolves variants left ambiguous above (VW
+                # ID only, one Haiku call per ambiguous listing). Skipped with AI off.
+                cat = (
+                    await agent_categorize_active(session, state.guide_categorizer)
+                    if ai_on
+                    and settings.guide_categorizer_enabled
+                    and state.guide_categorizer is not None
+                    else AgentCategorizeStats(skipped=True)
+                )
                 score_active(session)
                 ev = (
                     await evaluate_candidates(session, state.evaluator)
@@ -236,17 +249,19 @@ async def run_search(search_id: int, *, trigger: str = "scheduled") -> int | Non
                 run.listings_new = crawl.new
                 run.listings_updated = crawl.updated
                 run.listings_gone = gone
-                run.haiku_calls = norm.haiku_calls
+                run.haiku_calls = norm.haiku_calls + cat.haiku_calls
                 run.sonnet_calls = ev.sonnet_calls
-                run.est_cost_usd = round(norm.cost_usd + ev.cost_usd, 6)
+                run.est_cost_usd = round(norm.cost_usd + cat.cost_usd + ev.cost_usd, 6)
                 run.status = RunStatus.DONE.value
                 run.finished_at = utcnow()
                 session.add(run)
                 session.commit()
                 logger.info(
-                    "search '%s' run %s done: seen=%s new=%s gone=%s haiku=%s sonnet=%s cost=$%.4f",
+                    "search '%s' run %s done: seen=%s new=%s gone=%s haiku=%s "
+                    "guide_resolved=%s sonnet=%s cost=$%.4f",
                     search.name, run_id, crawl.seen, crawl.new, gone,
-                    norm.haiku_calls, ev.sonnet_calls, norm.cost_usd + ev.cost_usd,
+                    norm.haiku_calls + cat.haiku_calls, cat.resolved, ev.sonnet_calls,
+                    norm.cost_usd + cat.cost_usd + ev.cost_usd,
                 )
             except Exception as exc:  # noqa: BLE001 — recorded on the run
                 logger.exception("search run %s failed", run_id)

@@ -1,110 +1,89 @@
 import { useCallback, useEffect, useState } from "react";
 import { useListings } from "../hooks/useListings";
-import { ListingsTable } from "../components/ListingsTable";
+import { useDebounce } from "../hooks/useDebounce";
+import { ListingsTable, type TableFilters } from "../components/ListingsTable";
 import { ListingDetailDrawer } from "../components/ListingDetailDrawer";
 import { RefreshControls } from "../components/RefreshControls";
 import { AiToggle } from "../components/AiToggle";
-import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
-import { FacetFilters, type FacetSelection } from "../components/FacetFilters";
-import {
-  ListingFilters,
-  toListingQuery,
-  type ListingFilterValues,
-} from "../components/ListingFilters";
-import {
-  createSavedSearch,
-  getSavedSearches,
-  nlSearch,
-  recommend,
-  setFavorite,
-} from "../api/client";
+import { getFacets, recommend, setFavorite } from "../api/client";
 import type {
+  FacetCount,
   Listing,
-  NlSearchResponse,
+  ListingQuery,
   RecommendResponse,
-  SavedSearch,
   SortField,
-  StructuredFilters,
 } from "../types";
 
-const SORTS: { value: SortField; label: string }[] = [
-  { value: "scraped_at", label: "Newest" },
-  { value: "deal_score", label: "Best deal" },
-  { value: "price", label: "Price" },
-  { value: "year", label: "Year" },
-  { value: "mileage_km", label: "Mileage" },
-];
-const DESC_SORTS: SortField[] = ["scraped_at", "year", "deal_score"];
-
-const SOURCES: { value: string; label: string }[] = [
-  { value: "", label: "All sources" },
-  { value: "kleinanzeigen", label: "Kleinanzeigen" },
-  { value: "autoscout24", label: "AutoScout24" },
-  { value: "mobilede", label: "mobile.de" },
-];
+/** Sort fields that read most naturally in descending order by default. */
+const DESC_DEFAULT = new Set<SortField>(["scraped_at", "year", "deal_score"]);
 
 interface DashboardProps {
   onOpenGuide?: (model: string, make?: string) => void;
 }
 
+/** Map the column filters onto /api/listings query params (empties dropped by the client). */
+function toQuery(f: TableFilters): Partial<ListingQuery> {
+  return {
+    model: f.model || undefined,
+    variant: f.variant || undefined,
+    source: f.source || undefined,
+    price_min: f.price_min,
+    price_max: f.price_max,
+    year_min: f.year_min,
+    year_max: f.year_max,
+    mileage_max: f.mileage_max,
+    battery_kwh_min: f.battery_kwh_min,
+    battery_kwh_max: f.battery_kwh_max,
+    battery_soh_min: f.battery_soh_min,
+    favorites_only: f.favorites_only || undefined,
+  };
+}
+
 export function Dashboard({ onOpenGuide }: DashboardProps) {
+  const [filters, setFilters] = useState<TableFilters>({});
   const [sort, setSort] = useState<SortField>("scraped_at");
-  const [source, setSource] = useState<string>("");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Search tabs ("All" = undefined search_id, else a saved search id)
-  const [searches, setSearches] = useState<SavedSearch[]>([]);
-  const [activeSearch, setActiveSearch] = useState<number | "all">("all");
-  useEffect(() => {
-    getSavedSearches().then(setSearches).catch(() => setSearches([]));
-  }, []);
+  // Debounce so typing in a numeric/text header cell doesn't fire a request per keystroke.
+  const debouncedFilters = useDebounce(filters, 300);
 
-  // Refine-by facets (model / variant / battery), reset when scope changes.
-  const [facetSel, setFacetSel] = useState<FacetSelection>({});
-  const [filters, setFilters] = useState<ListingFilterValues>({});
-  useEffect(() => {
-    setFacetSel({});
-    setFilters({});
-  }, [activeSearch, source]);
-
-  const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
-  const { data, loading, error, reload } = useListings({
+  // Electric is hard-locked: every query is scoped to fuel=electric.
+  const query: ListingQuery = {
+    fuel: "electric",
     sort,
     order,
-    source: source || undefined,
-    search_id: activeSearch === "all" ? undefined : activeSearch,
-    favorites_only: favoritesOnly || undefined,
     page_size: 50,
-    ...toListingQuery(filters),
-    ...facetSel,
-  });
+    ...toQuery(debouncedFilters),
+  };
+  const { data, loading, error, reload } = useListings(query);
 
-  // NL search overlay
-  const [nl, setNl] = useState<NlSearchResponse | null>(null);
-  const [nlLoading, setNlLoading] = useState(false);
-  const [nlError, setNlError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  // Model dropdown options: all electric models, independent of other filters.
+  const [modelOptions, setModelOptions] = useState<FacetCount[]>([]);
+  useEffect(() => {
+    getFacets({ fuel: "electric" })
+      .then((f) => setModelOptions(f.models))
+      .catch(() => setModelOptions([]));
+  }, []);
 
-  // Selection + recommendation
+  const onSort = useCallback(
+    (field: SortField) => {
+      if (sort === field) {
+        setOrder((o) => (o === "asc" ? "desc" : "asc"));
+      } else {
+        setSort(field);
+        setOrder(DESC_DEFAULT.has(field) ? "desc" : "asc");
+      }
+    },
+    [sort],
+  );
+
+  // Selection + recommendation (the "analyzer").
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [rec, setRec] = useState<RecommendResponse | null>(null);
   const [recBusy, setRecBusy] = useState(false);
   const [recError, setRecError] = useState<string | null>(null);
-
-  const runNlSearch = useCallback(async (query: string) => {
-    setNlLoading(true);
-    setNlError(null);
-    setSaved(false);
-    try {
-      setNl(await nlSearch(query));
-    } catch (e) {
-      setNlError(e instanceof Error ? e.message : "Search failed");
-    } finally {
-      setNlLoading(false);
-    }
-  }, []);
 
   const toggle = useCallback((id: number) => {
     setPicked((prev) => {
@@ -114,36 +93,6 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
       return next;
     });
   }, []);
-
-  // Favorites (optimistic) — seeded from loaded items' is_favorite flag.
-  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
-  useEffect(() => {
-    const ids = (data?.items ?? [])
-      .filter((l) => l.is_favorite)
-      .map((l) => l.id);
-    setFavoriteIds(new Set(ids));
-  }, [data]);
-
-  const onToggleFavorite = useCallback(async (id: number) => {
-    const willFavorite = !favoriteIds.has(id);
-    setFavoriteIds((prev) => {
-      const next = new Set(prev);
-      if (willFavorite) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-    try {
-      await setFavorite(id, willFavorite);
-    } catch {
-      // Revert on error.
-      setFavoriteIds((prev) => {
-        const next = new Set(prev);
-        if (willFavorite) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-    }
-  }, [favoriteIds]);
 
   const getRecommendation = useCallback(async () => {
     setRecBusy(true);
@@ -157,88 +106,64 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
     }
   }, [picked]);
 
-  const saveCurrentSearch = useCallback(async () => {
-    if (!nl) return;
-    const name = window.prompt("Name this saved search:", nl.query)?.trim();
-    if (!name) return;
-    try {
-      await createSavedSearch({
-        name,
-        criteria: nl.filters as StructuredFilters,
-        nl_query: nl.query,
-        auto_evaluate: true,
+  // Favorites (optimistic) — seeded from loaded items' is_favorite flag.
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    const ids = (data?.items ?? []).filter((l) => l.is_favorite).map((l) => l.id);
+    setFavoriteIds(new Set(ids));
+  }, [data]);
+
+  const onToggleFavorite = useCallback(
+    async (id: number) => {
+      const willFavorite = !favoriteIds.has(id);
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (willFavorite) next.add(id);
+        else next.delete(id);
+        return next;
       });
-      setSaved(true);
-    } catch {
-      /* surfaced elsewhere; keep the bar simple */
-    }
-  }, [nl]);
+      try {
+        await setFavorite(id, willFavorite);
+      } catch {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          if (willFavorite) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      }
+    },
+    [favoriteIds],
+  );
 
-  const items: Listing[] = nl ? nl.results : (data?.items ?? []);
+  const items: Listing[] = data?.items ?? [];
   const canRecommend = picked.size >= 2 && picked.size <= 8;
-
-  // Infer the make for the currently selected facet model (so the guide opens
-  // for the right make); fall back to undefined and let ModelGuides match by model.
-  const activeMake = facetSel.model
-    ? (data?.items.find((l) => l.model === facetSel.model)?.make ?? undefined)
-    : undefined;
+  const hasFilters = Object.values(filters).some(
+    (v) => v !== undefined && v !== "" && v !== false,
+  );
 
   return (
     <section>
-      <div className="mb-4">
-        <SearchBar
-          onSearch={runNlSearch}
-          onClear={() => {
-            setNl(null);
-            setNlError(null);
-          }}
-          loading={nlLoading}
-          active={nl !== null}
-        />
-      </div>
-
-      {!nl && searches.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
-          <SearchTab label="All" active={activeSearch === "all"} onClick={() => setActiveSearch("all")} />
-          {searches.map((s) => (
-            <SearchTab
-              key={s.id}
-              label={s.name}
-              active={activeSearch === s.id}
-              onClick={() => setActiveSearch(s.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {nlError && (
-        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          {nlError}
-        </div>
-      )}
-      {nl && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
-          <span>
-            <span className="font-medium">Interpreted:</span> {nl.rationale}
-          </span>
-          <button
-            onClick={saveCurrentSearch}
-            disabled={saved}
-            className="shrink-0 rounded-md border border-sky-300 px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {saved ? "Saved ✓" : "Save this search"}
-          </button>
-        </div>
-      )}
-
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-800">
-          {nl ? "Search results" : "Listings"}
-          <span className="ml-2 text-sm font-normal text-slate-400">
-            {nl ? nl.total : (data?.total ?? 0)} found
+        <h2 className="flex items-center gap-3 text-lg font-semibold text-slate-800">
+          Opportunities
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+            ⚡ Electric only
+          </span>
+          <span className="text-sm font-normal text-slate-400">
+            {data?.total ?? 0} found
           </span>
         </h2>
         <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => setFilters({})}
+              className="text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              Clear filters
+            </button>
+          )}
           {picked.size > 0 && (
             <button
               onClick={getRecommendation}
@@ -249,68 +174,10 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
               {recBusy ? "Thinking…" : `Recommend (${picked.size})`}
             </button>
           )}
-          {!nl && (
-            <>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                aria-label="Source"
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
-              >
-                {SOURCES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <label className="flex items-center gap-2 text-sm text-slate-500">
-                Sort
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortField)}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
-                >
-                  {SORTS.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => setFavoritesOnly((v) => !v)}
-                aria-pressed={favoritesOnly}
-                className={`rounded-full border px-3 py-1 text-sm font-medium ${
-                  favoritesOnly
-                    ? "border-amber-300 bg-amber-50 text-amber-700"
-                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {favoritesOnly ? "★" : "☆"} Favorites only
-              </button>
-            </>
-          )}
           <AiToggle />
           <RefreshControls onComplete={reload} />
         </div>
       </div>
-
-      {!nl && (
-        <div className="mb-4 space-y-3">
-          <ListingFilters value={filters} onChange={setFilters} />
-          <FacetFilters
-            scope={{
-              search_id: activeSearch === "all" ? undefined : activeSearch,
-              source: source || undefined,
-            }}
-            value={facetSel}
-            onChange={setFacetSel}
-            activeMake={activeMake}
-            onOpenGuide={onOpenGuide}
-          />
-        </div>
-      )}
 
       {recError && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
@@ -325,12 +192,13 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
         />
       )}
 
-      {error && !nl && (
+      {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
         </div>
       )}
-      {loading && !data && !nl && <div className="text-slate-400">Loading…</div>}
+      {loading && !data && <div className="text-slate-400">Loading…</div>}
+
       <ListingsTable
         items={items}
         onSelect={setSelectedId}
@@ -338,6 +206,12 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
         onToggleSelect={toggle}
         favoriteIds={favoriteIds}
         onToggleFavorite={onToggleFavorite}
+        filters={filters}
+        onFilterChange={setFilters}
+        modelOptions={modelOptions}
+        sort={sort}
+        order={order}
+        onSort={onSort}
       />
 
       {selectedId !== null && (
@@ -348,28 +222,5 @@ export function Dashboard({ onOpenGuide }: DashboardProps) {
         />
       )}
     </section>
-  );
-}
-
-function SearchTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-        active
-          ? "border-sky-600 text-sky-700"
-          : "border-transparent text-slate-500 hover:text-slate-800"
-      }`}
-    >
-      {label}
-    </button>
   );
 }

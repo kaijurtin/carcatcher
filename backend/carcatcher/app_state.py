@@ -14,6 +14,7 @@ from carcatcher.ai.ollama_client import OllamaClient
 from carcatcher.ai.recommend import Recommender
 from carcatcher.config import Settings, get_settings
 from carcatcher.normalization.extractor import Extractor
+from carcatcher.normalization.guide_categorizer import GuideCategorizer
 from carcatcher.research.guide_generator import GuideGenerator
 from carcatcher.scraping.base import Scraper
 from carcatcher.scraping.firecrawl_client import FirecrawlClient
@@ -32,6 +33,7 @@ class AppState:
     evaluator: Evaluator
     translator: Translator
     recommender: Recommender
+    guide_categorizer: GuideCategorizer | None = None
     # Built by `build_state`; optional so test fixtures that construct AppState
     # directly (and never touch guides) don't have to supply one.
     generator: GuideGenerator | None = None
@@ -63,6 +65,7 @@ def build_state(settings: Settings | None = None) -> AppState:
         evaluator=Evaluator(provider),
         translator=Translator(provider),
         recommender=Recommender(provider),
+        guide_categorizer=GuideCategorizer(provider),
         generator=GuideGenerator(provider=provider, firecrawl=firecrawl),
     )
 

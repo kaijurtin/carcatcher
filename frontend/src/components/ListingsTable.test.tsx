@@ -144,7 +144,73 @@ test("clicking the star calls onToggleFavorite and not onSelect", () => {
       onSelect={onSelect}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: /Favorite/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Favorite Volkswagen/ }));
   expect(onToggleFavorite).toHaveBeenCalledWith(7);
   expect(onSelect).not.toHaveBeenCalled();
+});
+
+test("renders the Variant column value", () => {
+  render(<ListingsTable items={[listing({ variant: "Pro S" })]} />);
+  expect(screen.getByText("Pro S")).toBeInTheDocument();
+});
+
+test("renders a filter row and sortable headers when filter props are given", () => {
+  render(
+    <ListingsTable
+      items={[listing({})]}
+      filters={{}}
+      onFilterChange={() => {}}
+      onSort={() => {}}
+      sort="scraped_at"
+      order="desc"
+    />,
+  );
+  expect(screen.getByLabelText("Filter model")).toBeInTheDocument();
+  expect(screen.getByLabelText("Mileage max")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sort by Price" })).toBeInTheDocument();
+});
+
+test("clicking a sortable header calls onSort with that field", () => {
+  const onSort = vi.fn();
+  render(
+    <ListingsTable
+      items={[listing({})]}
+      onFilterChange={() => {}}
+      onSort={onSort}
+      sort="scraped_at"
+      order="desc"
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Sort by Year" }));
+  expect(onSort).toHaveBeenCalledWith("year");
+});
+
+test("editing a column filter calls onFilterChange", () => {
+  const onFilterChange = vi.fn();
+  render(
+    <ListingsTable items={[listing({})]} filters={{}} onFilterChange={onFilterChange} />,
+  );
+  fireEvent.change(screen.getByLabelText("Filter variant"), {
+    target: { value: "GTX" },
+  });
+  expect(onFilterChange).toHaveBeenCalledWith({ variant: "GTX" });
+});
+
+test("the favorites header toggles favorites_only via onFilterChange", () => {
+  const onFilterChange = vi.fn();
+  render(
+    <ListingsTable
+      items={[listing({})]}
+      filters={{}}
+      onFilterChange={onFilterChange}
+      onToggleFavorite={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Favorites only" }));
+  expect(onFilterChange).toHaveBeenCalledWith({ favorites_only: true });
+});
+
+test("shows a no-matches row (not the crawl CTA) when filtering yields nothing", () => {
+  render(<ListingsTable items={[]} filters={{}} onFilterChange={() => {}} />);
+  expect(screen.getByText(/No listings match these filters/)).toBeInTheDocument();
 });

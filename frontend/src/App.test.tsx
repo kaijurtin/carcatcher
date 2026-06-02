@@ -52,6 +52,6 @@ test("renders the empty-state when there are no listings", async () => {
   mockApi({ status: "ok" });
   render(<App />);
   await waitFor(() =>
-    expect(screen.getByText(/No listings yet/)).toBeInTheDocument(),
+    expect(screen.getByText(/No listings match these filters/)).toBeInTheDocument(),
   );
 });
