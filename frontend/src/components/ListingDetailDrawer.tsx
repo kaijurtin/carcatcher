@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { evaluateListing, getListing, setFavorite } from "../api/client";
+import {
+  createModelGuide,
+  evaluateListing,
+  getListing,
+  setFavorite,
+  setListingModel,
+} from "../api/client";
 import type { AiEvaluation, Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
 import { DealScoreBadge } from "./DealScoreBadge";
@@ -10,13 +16,17 @@ const VERDICT_STYLE: Record<AiEvaluation["deal_verdict"], string> = {
   overpriced: "bg-rose-100 text-rose-700",
 };
 
+interface ListingDetailDrawerProps {
+  listingId: number;
+  onClose: () => void;
+  onOpenGuide?: (model: string, make?: string) => void;
+}
+
 export function ListingDetailDrawer({
   listingId,
   onClose,
-}: {
-  listingId: number;
-  onClose: () => void;
-}) {
+  onOpenGuide,
+}: ListingDetailDrawerProps) {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -114,6 +124,21 @@ export function ListingDetailDrawer({
         {listing && (
           <div className="space-y-6 px-6 py-5">
             <SpecGrid listing={listing} />
+            <ModelSection
+              listing={listing}
+              onOpenGuide={onOpenGuide}
+              onReassign={async (model) => {
+                const prev = listing;
+                // Optimistic update.
+                setListing({ ...listing, model, model_locked: true });
+                try {
+                  setListing(await setListingModel(listing.id, model));
+                } catch (e) {
+                  setListing(prev);
+                  setError(e instanceof Error ? e.message : "Model reassign failed");
+                }
+              }}
+            />
             <AiSection
               evaluation={listing.ai_evaluation}
               evaluating={evaluating}
@@ -130,6 +155,125 @@ export function ListingDetailDrawer({
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+function ModelSection({
+  listing,
+  onOpenGuide,
+  onReassign,
+}: {
+  listing: Listing;
+  onOpenGuide?: (model: string, make?: string) => void;
+  onReassign: (model: string) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(listing.model ?? "");
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const onCreateGuide = async () => {
+    if (!listing.model) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await createModelGuide(listing.make ?? "", listing.model);
+      setCreated(true);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : "Could not start generation.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const save = async () => {
+    const value = draft.trim();
+    if (!value || value === listing.model) {
+      setEditing(false);
+      return;
+    }
+    await onReassign(value);
+    setEditing(false);
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Model</p>
+        {listing.model_locked && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            manual
+          </span>
+        )}
+      </div>
+
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        <span className="font-medium text-slate-800">
+          {[listing.make, listing.model].filter(Boolean).join(" ") || "—"}
+        </span>
+        {listing.model && onOpenGuide && (
+          <button
+            type="button"
+            onClick={() => onOpenGuide(listing.model!, listing.make ?? undefined)}
+            className="rounded-md border border-sky-300 px-2 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-50"
+          >
+            📖 Model guide
+          </button>
+        )}
+        {listing.model && (
+          <button
+            type="button"
+            onClick={onCreateGuide}
+            disabled={creating || created}
+            className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {created ? "Guide queued ✓" : creating ? "Creating…" : "Create guide"}
+          </button>
+        )}
+      </div>
+
+      {createError && <p className="mb-2 text-xs text-rose-600">{createError}</p>}
+
+      {editing ? (
+        <div className="flex items-center gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            aria-label="Reassign model"
+            className="w-40 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
+          />
+          <button
+            type="button"
+            onClick={save}
+            className="rounded-md bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-700"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(listing.model ?? "");
+              setEditing(false);
+            }}
+            className="text-xs font-medium text-slate-500 hover:text-slate-700"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(listing.model ?? "");
+            setEditing(true);
+          }}
+          className="text-xs font-medium text-slate-500 hover:text-slate-700"
+        >
+          Reassign model
+        </button>
+      )}
     </div>
   );
 }

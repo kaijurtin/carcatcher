@@ -8,6 +8,11 @@ import { SearchBar } from "../components/SearchBar";
 import { RecommendationPanel } from "../components/RecommendationPanel";
 import { FacetFilters, type FacetSelection } from "../components/FacetFilters";
 import {
+  ListingFilters,
+  toListingQuery,
+  type ListingFilterValues,
+} from "../components/ListingFilters";
+import {
   createSavedSearch,
   getSavedSearches,
   nlSearch,
@@ -39,7 +44,11 @@ const SOURCES: { value: string; label: string }[] = [
   { value: "mobilede", label: "mobile.de" },
 ];
 
-export function Dashboard() {
+interface DashboardProps {
+  onOpenGuide?: (model: string, make?: string) => void;
+}
+
+export function Dashboard({ onOpenGuide }: DashboardProps) {
   const [sort, setSort] = useState<SortField>("scraped_at");
   const [source, setSource] = useState<string>("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -54,8 +63,10 @@ export function Dashboard() {
 
   // Refine-by facets (model / variant / battery), reset when scope changes.
   const [facetSel, setFacetSel] = useState<FacetSelection>({});
+  const [filters, setFilters] = useState<ListingFilterValues>({});
   useEffect(() => {
     setFacetSel({});
+    setFilters({});
   }, [activeSearch, source]);
 
   const order = DESC_SORTS.includes(sort) ? "desc" : "asc";
@@ -66,6 +77,7 @@ export function Dashboard() {
     search_id: activeSearch === "all" ? undefined : activeSearch,
     favorites_only: favoritesOnly || undefined,
     page_size: 50,
+    ...toListingQuery(filters),
     ...facetSel,
   });
 
@@ -164,6 +176,12 @@ export function Dashboard() {
 
   const items: Listing[] = nl ? nl.results : (data?.items ?? []);
   const canRecommend = picked.size >= 2 && picked.size <= 8;
+
+  // Infer the make for the currently selected facet model (so the guide opens
+  // for the right make); fall back to undefined and let ModelGuides match by model.
+  const activeMake = facetSel.model
+    ? (data?.items.find((l) => l.model === facetSel.model)?.make ?? undefined)
+    : undefined;
 
   return (
     <section>
@@ -279,7 +297,8 @@ export function Dashboard() {
       </div>
 
       {!nl && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
+          <ListingFilters value={filters} onChange={setFilters} />
           <FacetFilters
             scope={{
               search_id: activeSearch === "all" ? undefined : activeSearch,
@@ -287,6 +306,8 @@ export function Dashboard() {
             }}
             value={facetSel}
             onChange={setFacetSel}
+            activeMake={activeMake}
+            onOpenGuide={onOpenGuide}
           />
         </div>
       )}
@@ -323,6 +344,7 @@ export function Dashboard() {
         <ListingDetailDrawer
           listingId={selectedId}
           onClose={() => setSelectedId(null)}
+          onOpenGuide={onOpenGuide}
         />
       )}
     </section>

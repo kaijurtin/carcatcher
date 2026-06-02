@@ -72,11 +72,19 @@ class Settings(BaseSettings):
         return [s.strip() for s in self.crawl_sources.split(",") if s.strip()]
 
     @property
+    def bundled_guides_dir(self) -> Path:
+        """Repo-bundled guide directory (backend/model_guides), seed source."""
+        return Path(__file__).resolve().parent.parent / "model_guides"
+
+    @property
     def guides_dir(self) -> Path:
-        """Directory holding model-guide .md files (repo-bundled by default)."""
+        """Directory holding model-guide .md files (repo-bundled by default).
+
+        Set MODEL_GUIDES_DIR to serve/write from a persistent volume (e.g. /data),
+        which is then seeded from the bundled tree on startup."""
         if self.model_guides_dir:
             return Path(self.model_guides_dir)
-        return Path(__file__).resolve().parent.parent / "model_guides"
+        return self.bundled_guides_dir
 
 
 _settings: Settings | None = None

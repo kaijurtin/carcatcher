@@ -107,6 +107,30 @@ export function getModelGuide(make: string, model: string): Promise<ModelGuide> 
   );
 }
 
+export async function createModelGuide(make: string, model: string): Promise<void> {
+  const resp = await fetch(`${BASE}/models/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ make, model }),
+  });
+  if (resp.status === 202) return;
+  if (!resp.ok) {
+    throw new ApiError(resp.status, `guide generation failed: ${resp.status}`);
+  }
+}
+
+export async function setListingModel(id: number, model: string): Promise<Listing> {
+  const resp = await fetch(`${BASE}/listings/${id}/model`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+  if (!resp.ok) {
+    throw new ApiError(resp.status, `model reassign failed: ${resp.status}`);
+  }
+  return (await resp.json()) as Listing;
+}
+
 export async function setAiEnabled(enabled: boolean): Promise<AppSettings> {
   const resp = await fetch(`${BASE}/settings/ai`, {
     method: "PUT",

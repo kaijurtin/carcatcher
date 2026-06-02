@@ -13,12 +13,16 @@ interface FacetFiltersProps {
   scope: { search_id?: number; source?: string };
   value: FacetSelection;
   onChange: (next: FacetSelection) => void;
+  /** Active make for the current scope, if known (used to open the right guide). */
+  activeMake?: string;
+  /** Switch to the Model Guides tab for the given model. */
+  onOpenGuide?: (model: string, make?: string) => void;
 }
 
 /** Refine-by panel: distinct models/variants (with counts) and a battery-kWh range
  *  present in the current result scope. Cascades — selecting a model re-narrows the
  *  variant list and battery range. */
-export function FacetFilters({ scope, value, onChange }: FacetFiltersProps) {
+export function FacetFilters({ scope, value, onChange, activeMake, onOpenGuide }: FacetFiltersProps) {
   const [facets, setFacets] = useState<Facets | null>(null);
   const key = JSON.stringify({ scope, value });
 
@@ -65,6 +69,16 @@ export function FacetFilters({ scope, value, onChange }: FacetFiltersProps) {
             ))}
           </select>
         </label>
+      )}
+
+      {value.model && onOpenGuide && (
+        <button
+          type="button"
+          onClick={() => onOpenGuide(value.model!, activeMake)}
+          className="rounded-md border border-sky-300 bg-white px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50"
+        >
+          📖 Guide
+        </button>
       )}
 
       {hasVariants && (

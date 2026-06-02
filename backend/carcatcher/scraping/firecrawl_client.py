@@ -84,3 +84,32 @@ class FirecrawlClient:
         if not body.get("success", False):
             raise FirecrawlError(f"Firecrawl unsuccessful for {url}: {body!r}")
         return body.get("data", {})
+
+    async def search(self, query: str, *, limit: int = 6) -> list[dict]:
+        """Web search via Firecrawl, returning the `data` list of
+        `{url, title, description}` results (empty list on no hits)."""
+        payload: dict = {"query": query, "limit": limit}
+        headers = {}
+        if self._s.firecrawl_api_key:
+            headers["Authorization"] = f"Bearer {self._s.firecrawl_api_key}"
+
+        async with self._sem:
+            await self._throttle()
+            try:
+                resp = await self._client.post(
+                    f"{self._s.firecrawl_base_url}/v1/search",
+                    json=payload,
+                    headers=headers,
+                )
+            except httpx.HTTPError as exc:
+                raise FirecrawlError(f"request to Firecrawl failed: {exc}") from exc
+
+        if resp.status_code != 200:
+            raise FirecrawlError(
+                f"Firecrawl search returned {resp.status_code} for "
+                f"{query!r}: {resp.text[:200]}"
+            )
+        body = resp.json()
+        if not body.get("success", False):
+            raise FirecrawlError(f"Firecrawl search unsuccessful for {query!r}: {body!r}")
+        return body.get("data", [])

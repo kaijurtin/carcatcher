@@ -39,6 +39,7 @@ export interface Listing {
   ai_evaluation: AiEvaluation | null;
   ai_evaluated_at: string | null;
   is_favorite: boolean;
+  model_locked: boolean;
   first_seen_at: string;
   last_seen_at: string;
   scraped_at: string;
@@ -117,6 +118,7 @@ export interface ModelGuideSummary {
   model: string | null;
   title: string;
   updated: string | null;
+  status?: "ready" | "generating" | "failed";
 }
 
 export interface ModelGuide {
@@ -166,12 +168,17 @@ export interface ListingQuery {
   make?: string;
   model?: string;
   variant?: string;
+  price_min?: number;
   price_max?: number;
   mileage_max?: number;
   year_min?: number;
+  year_max?: number;
   battery_kwh_min?: number;
   battery_kwh_max?: number;
   battery_soh_min?: number;
+  seller_type?: string;
+  transmission?: string;
+  fuel?: string;
   favorites_only?: boolean;
   sort?: SortField;
   order?: "asc" | "desc";

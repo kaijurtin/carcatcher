@@ -122,7 +122,10 @@ def apply_categorization(listing: Listing) -> bool:
 
     Canonicalizes make/model; gap-fills variant and battery without clobbering a
     populated variant or overriding a battery value that isn't near a known spec.
+    No-op when the user has locked the model via a manual reassignment.
     """
+    if listing.model_locked:
+        return False
     result = categorize(
         listing.make,
         listing.model,

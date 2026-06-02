@@ -37,10 +37,17 @@ class NormalizeStats:
     cost_usd: float = 0.0
 
 
+# Fields the user can lock via a manual model reassignment — never AI-overwritten
+# once `model_locked` is set.
+_LOCKED_FIELDS = ("model", "variant")
+
+
 def apply_normalized(listing: Listing, norm: NormalizedListing) -> None:
     # Non-destructive: only overwrite when Haiku actually returned a value, so a
     # sparse extraction can never null out fields already populated by a scraper.
     for field in _AI_FIELDS:
+        if listing.model_locked and field in _LOCKED_FIELDS:
+            continue  # user manually set the model — don't clobber it
         value = getattr(norm, field)
         if value is not None:
             setattr(listing, field, value)

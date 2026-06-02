@@ -20,6 +20,7 @@ from carcatcher.api.routes import (
 from carcatcher.app_state import build_state, get_state, set_state
 from carcatcher.config import get_settings
 from carcatcher.db.engine import init_db
+from carcatcher.research.seed import seed_guides_dir
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    seed_guides_dir()
     settings = get_settings()
     state = build_state(settings)
     set_state(state)

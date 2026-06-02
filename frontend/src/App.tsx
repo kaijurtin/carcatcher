@@ -7,9 +7,20 @@ import { ModelGuides } from "./pages/ModelGuides";
 type HealthState = "checking" | "ok" | "down";
 type View = "dashboard" | "searches" | "models";
 
+interface GuideTarget {
+  make?: string;
+  model: string;
+}
+
 export default function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [view, setView] = useState<View>("dashboard");
+  const [modelGuideTarget, setModelGuideTarget] = useState<GuideTarget | null>(null);
+
+  const openGuide = (model: string, make?: string) => {
+    setModelGuideTarget({ make, model });
+    setView("models");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -37,9 +48,13 @@ export default function App() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
-        {view === "dashboard" && <Dashboard />}
+        {view === "dashboard" && <Dashboard onOpenGuide={openGuide} />}
         {view === "searches" && <SavedSearches />}
-        {view === "models" && <ModelGuides />}
+        {view === "models" && (
+          <ModelGuides
+            initialGuide={modelGuideTarget ?? undefined}
+          />
+        )}
       </main>
     </div>
   );

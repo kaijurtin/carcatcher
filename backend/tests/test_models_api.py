@@ -87,3 +87,67 @@ def test_get_guide_path_traversal_blocked(client, tmp_path):
     _point_guides_at(tmp_path)
     # slugify neutralizes separators, so traversal can't escape the guides root.
     assert client.get("/api/models/../../etc/passwd").status_code in (404, 405, 422)
+
+
+# --- generation + seeding -------------------------------------------------- #
+
+def test_generate_returns_202_and_shows_generating(client, tmp_path, monkeypatch):
+    """POST /generate kicks off a job; GET /models surfaces it as 'generating'."""
+    from carcatcher.app_state import get_state
+    from carcatcher.research import guide_generator
+
+    config._settings.model_guides_dir = str(tmp_path)
+
+    # Neutralize the actual generator so the job never completes during the test
+    # (it stays 'generating'); we only assert the job is registered + listed.
+    async def _never_finishing(make, model, *, existing_md=None):
+        import asyncio
+        await asyncio.sleep(60)
+        return ""
+
+    monkeypatch.setattr(
+        get_state().generator, "generate_guide", _never_finishing
+    )
+
+    resp = client.post("/api/models/generate", json={"make": "Tesla", "model": "Model 3"})
+    assert resp.status_code == 202
+    assert resp.json() == {"status": "generating"}
+
+    listed = client.get("/api/models").json()
+    job_entry = [g for g in listed if g["model"] == "Model 3"]
+    assert len(job_entry) == 1
+    assert job_entry[0]["status"] == "generating"
+    assert job_entry[0]["make"] == "Tesla"
+
+
+def test_generate_validates_blank_input(client, tmp_path):
+    config._settings.model_guides_dir = str(tmp_path)
+    resp = client.post("/api/models/generate", json={"make": "  ", "model": ""})
+    assert resp.status_code == 422
+
+
+def test_seed_guides_dir_copies_bundled_into_empty_target(tmp_path):
+    from carcatcher.research.seed import seed_guides_dir
+
+    config._settings.model_guides_dir = str(tmp_path)
+    assert not list(tmp_path.rglob("*.md"))  # starts empty
+
+    seed_guides_dir()
+
+    copied = list(tmp_path.rglob("*.md"))
+    assert copied  # bundled tree (e.g. volkswagen/id-4.md) now present
+    assert any(p.name == "id-4.md" for p in copied)
+
+
+def test_seed_guides_dir_noop_when_already_populated(tmp_path):
+    from carcatcher.research.seed import seed_guides_dir
+
+    config._settings.model_guides_dir = str(tmp_path)
+    (tmp_path / "custom").mkdir()
+    (tmp_path / "custom" / "mine.md").write_text("--- ---\n# mine", encoding="utf-8")
+
+    seed_guides_dir()
+
+    # Existing guide untouched and bundled tree NOT copied over it.
+    assert (tmp_path / "custom" / "mine.md").exists()
+    assert not (tmp_path / "volkswagen").exists()

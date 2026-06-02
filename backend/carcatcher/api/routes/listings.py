@@ -62,6 +62,7 @@ class ListingRead(BaseModel):
     location_city: str | None
     location_plz: str | None
     seller_type: str | None
+    model_locked: bool = False
     fair_price_estimate: int | None
     deal_score: float | None
     comp_count: int | None
@@ -78,6 +79,13 @@ class ListingsPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ModelReassign(BaseModel):
+    # `model` shadows Pydantic's protected namespace; opt out of the warning.
+    model_config = ConfigDict(protected_namespaces=())
+
+    model: str
 
 
 SortField = Literal["scraped_at", "price", "deal_score", "year", "mileage_km"]
@@ -355,6 +363,29 @@ def remove_favorite(
         session.delete(existing)
         session.commit()
     return Response(status_code=204)
+
+
+@router.patch("/listings/{listing_id}/model", response_model=ListingRead)
+def reassign_model(
+    listing_id: int,
+    payload: ModelReassign,
+    session: Session = Depends(get_session),
+) -> ListingRead:
+    """Manually set a listing's model and lock it so AI never overwrites it."""
+    listing = session.get(Listing, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=404, detail="listing not found")
+    new_model = payload.model.strip()
+    if not new_model:
+        raise HTTPException(status_code=422, detail="model must not be empty")
+    listing.model = new_model
+    listing.model_locked = True
+    session.add(listing)
+    session.commit()
+    session.refresh(listing)
+    out = ListingRead.model_validate(listing)
+    out.is_favorite = bool(_favorite_ids(session, [listing.id]))
+    return out
 
 
 @router.post("/listings/{listing_id}/evaluate", response_model=ListingRead)

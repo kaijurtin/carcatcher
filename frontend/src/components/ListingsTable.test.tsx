@@ -36,6 +36,7 @@ function listing(over: Partial<Listing>): Listing {
     ai_evaluation: null,
     ai_evaluated_at: null,
     is_favorite: false,
+    model_locked: false,
     first_seen_at: "2026-05-31T00:00:00Z",
     last_seen_at: "2026-05-31T00:00:00Z",
     scraped_at: "2026-05-31T00:00:00Z",

@@ -13,7 +13,7 @@ function listing(over: Partial<Listing>): Listing {
     body_type: null, location_city: null,
     location_plz: null, seller_type: "private", fair_price_estimate: 10500,
     deal_score: 0.14, comp_count: 6, ai_evaluation: null, ai_evaluated_at: null,
-    is_favorite: false,
+    is_favorite: false, model_locked: false,
     first_seen_at: "2026-05-31T00:00:00Z", last_seen_at: "2026-05-31T00:00:00Z",
     scraped_at: "2026-05-31T00:00:00Z",
     ...over,
@@ -76,4 +76,37 @@ test("calls onClose when the close button is clicked", async () => {
   );
   fireEvent.click(screen.getByLabelText("Close"));
   expect(onClose).toHaveBeenCalled();
+});
+
+test("model guide button calls onOpenGuide with make and model", async () => {
+  mockFetch(listing({}));
+  const onOpenGuide = vi.fn();
+  render(<ListingDetailDrawer listingId={7} onClose={() => {}} onOpenGuide={onOpenGuide} />);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /Model guide/ })).toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Model guide/ }));
+  expect(onOpenGuide).toHaveBeenCalledWith("Golf", "Volkswagen");
+});
+
+test("reassign model PATCHes and marks the listing manual", async () => {
+  const updated = listing({ model: "Polo", model_locked: true });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (init?.method === "PATCH" && url.includes("/model")) {
+      return new Response(JSON.stringify(updated), { status: 200 });
+    }
+    return new Response(JSON.stringify(listing({})), { status: 200 });
+  });
+
+  render(<ListingDetailDrawer listingId={7} onClose={() => {}} />);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /Reassign model/ })).toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Reassign model/ }));
+  fireEvent.change(screen.getByLabelText("Reassign model"), { target: { value: "Polo" } });
+  fireEvent.click(screen.getByRole("button", { name: /^Save$/ }));
+
+  // The model field now reads "Volkswagen Polo" (from the PATCH response).
+  await waitFor(() => expect(screen.getByText("Volkswagen Polo")).toBeInTheDocument());
 });

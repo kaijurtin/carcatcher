@@ -98,6 +98,9 @@ class Listing(SQLModel, table=True):
     location_city: str | None = None
     location_plz: str | None = None
     seller_type: str | None = None
+    # When True, the user has manually set `model`; normalization/categorization
+    # must not overwrite it on subsequent crawls.
+    model_locked: bool = False
     normalization_error: str | None = None
 
     # --- scoring ---

@@ -11,7 +11,7 @@ function listing(over: Partial<Listing>): Listing {
     make: "Volkswagen", model: "Golf", variant: null, fuel: null, transmission: null,
     power_kw: null, battery_kwh: null, battery_soh_pct: null, body_type: null, location_city: null, location_plz: null,
     seller_type: null, fair_price_estimate: 10000, deal_score: 0.1, comp_count: 6,
-    ai_evaluation: null, ai_evaluated_at: null, is_favorite: false,
+    ai_evaluation: null, ai_evaluated_at: null, is_favorite: false, model_locked: false,
     first_seen_at: "2026-05-31T00:00:00Z", last_seen_at: "2026-05-31T00:00:00Z",
     scraped_at: "2026-05-31T00:00:00Z",
     ...over,

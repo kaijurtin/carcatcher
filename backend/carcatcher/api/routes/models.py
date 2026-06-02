@@ -8,13 +8,17 @@ reads and serves them — it never mutates a guide.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from carcatcher.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,6 +58,12 @@ class GuideSummary(BaseModel):
     model: str | None = None
     title: str
     updated: str | None = None
+    status: str = "ready"
+
+
+class GenerateRequest(BaseModel):
+    make: str
+    model: str
 
 
 class GuideDetail(BaseModel):
@@ -63,25 +73,103 @@ class GuideDetail(BaseModel):
     markdown: str
 
 
+def _guide_jobs() -> dict[str, dict]:
+    """The in-flight guide-job map, or {} if AppState isn't initialized (tests)."""
+    from carcatcher.app_state import get_state
+
+    try:
+        return get_state().guide_jobs
+    except RuntimeError:
+        return {}
+
+
 @router.get("/models", response_model=list[GuideSummary])
 def list_model_guides() -> list[GuideSummary]:
-    """All available guides (front-matter summary), sorted by make+model."""
+    """All ready guides (front-matter summary) plus any in-flight/failed jobs,
+    sorted by make+model. Jobs whose guide file already exists are not duplicated."""
     root = get_settings().guides_dir
-    if not root.exists():
-        return []
     out: list[GuideSummary] = []
-    for path in sorted(root.rglob("*.md")):
-        if path.name.lower() in _RESERVED:
+    ready_slugs: set[str] = set()
+    if root.exists():
+        for path in sorted(root.rglob("*.md")):
+            if path.name.lower() in _RESERVED:
+                continue
+            fm, body = parse_front_matter(path.read_text(encoding="utf-8"))
+            make, model = fm.get("make"), fm.get("model")
+            if make and model:
+                ready_slugs.add(f"{slugify(make)}/{slugify(model)}")
+            out.append(
+                GuideSummary(
+                    make=make, model=model,
+                    title=_title(fm, body), updated=fm.get("updated"),
+                    status="ready",
+                )
+            )
+    # Surface generating/failed jobs the UI hasn't seen as ready files yet.
+    for slug, job in _guide_jobs().items():
+        if slug in ready_slugs or job.get("status") == "ready":
             continue
-        fm, body = parse_front_matter(path.read_text(encoding="utf-8"))
+        make, model = job.get("make"), job.get("model")
         out.append(
             GuideSummary(
-                make=fm.get("make"), model=fm.get("model"),
-                title=_title(fm, body), updated=fm.get("updated"),
+                make=make, model=model,
+                title=f"{make} {model}".strip() or slug,
+                updated=None, status=job.get("status", "generating"),
             )
         )
     out.sort(key=lambda g: ((g.make or "").lower(), (g.model or "").lower()))
     return out
+
+
+async def _run_generation(make: str, model: str, slug: str) -> None:
+    """Background task: generate (or enhance) a guide and persist it to guides_dir."""
+    from carcatcher.app_state import get_state
+
+    state = get_state()
+    settings = get_settings()
+    root = settings.guides_dir
+    path = root / slugify(make) / f"{slugify(model)}.md"
+
+    existing_md: str | None = None
+    if path.is_file():
+        existing_md = path.read_text(encoding="utf-8")
+
+    try:
+        markdown = await state.generator.generate_guide(
+            make, model, existing_md=existing_md
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
+        state.guide_jobs[slug] = {"status": "ready", "make": make, "model": model}
+    except Exception as exc:  # noqa: BLE001 — surfaced via the job log
+        logger.exception("guide generation failed for %s", slug)
+        state.guide_jobs[slug] = {
+            "status": "failed", "make": make, "model": model, "error": str(exc)[:500],
+        }
+
+
+@router.post("/models/generate", status_code=202)
+async def generate_model_guide(req: GenerateRequest) -> Response:
+    """Kick off (or enhance) a guide generation in the background; returns 202.
+
+    Idempotent while running: a second call for an already-generating slug returns
+    202 without launching a duplicate task."""
+    from carcatcher.app_state import get_state
+
+    make, model = req.make.strip(), req.model.strip()
+    if not make or not model:
+        raise HTTPException(status_code=422, detail="make and model are required")
+    slug = f"{slugify(make)}/{slugify(model)}"
+
+    jobs = get_state().guide_jobs
+    if jobs.get(slug, {}).get("status") == "generating":
+        return Response(content='{"status":"generating"}', status_code=202,
+                        media_type="application/json")
+
+    jobs[slug] = {"status": "generating", "make": make, "model": model}
+    asyncio.create_task(_run_generation(make, model, slug))
+    return Response(content='{"status":"generating"}', status_code=202,
+                    media_type="application/json")
 
 
 @router.get("/models/{make}/{model}/research", response_model=GuideDetail)
