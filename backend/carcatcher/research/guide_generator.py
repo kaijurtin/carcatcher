@@ -154,8 +154,14 @@ def _bump_revisions(existing_md: str | None) -> int:
 
 def _front_matter(make: str, model: str, data: dict, existing_md: str | None) -> str:
     fm_existing, _ = parse_front_matter(existing_md or "")
-    year_range = data.get("year_range") or fm_existing.get("year_range") or "—"
-    n_sources = len([s for s in (data.get("sources") or []) if s and s.get("url")])
+    year_range = _as_line(data.get("year_range")) or fm_existing.get("year_range") or "—"
+
+    def _has_url(s) -> bool:
+        if isinstance(s, str):
+            return bool(s.strip())
+        return bool(isinstance(s, dict) and s.get("url"))
+
+    n_sources = len([s for s in (data.get("sources") or []) if _has_url(s)])
     return (
         "---\n"
         f"make: {make}\n"
@@ -169,39 +175,70 @@ def _front_matter(make: str, model: str, data: dict, existing_md: str | None) ->
     )
 
 
-def _bullet_section(title: str, items: list[str] | None) -> str:
-    rows = [f"- {i}" for i in (items or []) if i and i.strip()]
+def _as_line(item) -> str | None:
+    """Coerce a list item (str / dict / other) the model returned into one clean line."""
+    if item is None:
+        return None
+    if isinstance(item, str):
+        return item.strip() or None
+    if isinstance(item, dict):
+        parts = [str(v).strip() for v in item.values() if v not in (None, "", [], {})]
+        return " — ".join(p for p in parts if p) or None
+    return str(item).strip() or None
+
+
+def _scalar(value, default: str) -> str:
+    """Coerce a scalar-ish field (str / list / dict) into display text."""
+    if value in (None, "", [], {}):
+        return default
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        lines = [ln for ln in (_as_line(v) for v in value) if ln]
+        return "; ".join(lines) or default
+    if isinstance(value, dict):
+        return _as_line(value) or default
+    return str(value)
+
+
+def _bullet_section(title: str, items: list | None) -> str:
+    rows = [f"- {ln}" for ln in (_as_line(i) for i in (items or [])) if ln]
     body = "\n".join(rows) if rows else "_Keine belastbaren Angaben aus den Quellen._"
     return f"## {title}\n{body}\n"
 
 
 def _sources_section(data: dict) -> str:
     rows = []
-    for i, src in enumerate(data.get("sources") or [], start=1):
-        if not src:
+    n = 0
+    for src in data.get("sources") or []:
+        if isinstance(src, str):
+            url, title = src, src
+        elif isinstance(src, dict):
+            url = src.get("url")
+            title = src.get("title") or url
+        else:
             continue
-        url = src.get("url")
         if not url:
             continue
-        title = src.get("title") or url
-        rows.append(f"{i}. [{title}]({url})")
+        n += 1
+        rows.append(f"{n}. [{title}]({url})")
     body = "\n".join(rows) if rows else "_Keine Quellen verfügbar._"
     return f"## Sources\n{body}\n"
 
 
 def _new_body(make: str, model: str, data: dict) -> str:
-    overview = data.get("overview") or "_Übersicht folgt — begrenzte Quellenlage._"
-    best_year = data.get("best_year")
+    overview = _scalar(data.get("overview"), "_Übersicht folgt — begrenzte Quellenlage._")
+    best_year = _as_line(data.get("best_year"))
     tips = list(data.get("buying_tips") or [])
     if best_year:
         tips = [f"Bestes Baujahr: {best_year}", *tips]
+    suppliers = _scalar(data.get("battery_suppliers"), "_Keine belastbaren Angaben aus den Quellen._")
     return "\n".join(
         [
             f"# {make} {model} — Kaufberatung (DE)\n",
             f"> {overview}\n",
             _bullet_section("Variants & specs", data.get("variants")),
-            f"## Battery cell suppliers\n"
-            f"{data.get('battery_suppliers') or '_Keine belastbaren Angaben aus den Quellen._'}\n",
+            f"## Battery cell suppliers\n{suppliers}\n",
             _bullet_section("Known problems & recalls",
                             list(data.get("problems") or []) + list(data.get("recalls") or [])),
             _bullet_section("Buying tips — best year", tips),

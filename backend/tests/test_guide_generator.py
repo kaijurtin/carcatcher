@@ -96,6 +96,29 @@ async def test_generate_guide_enhance_preserves_existing_and_bumps_revision():
     assert "Pro S 82 kWh" in md
 
 
+async def test_generate_guide_handles_dict_shaped_items():
+    # The 7B sometimes returns list items as dicts / sources as bare strings — the
+    # renderer must coerce these instead of crashing (regression).
+    messy = {
+        "overview": {"text": "Elektro-SUV", "note": "Familie"},
+        "variants": [{"name": "Pro", "battery": "77 kWh"}, "Pro S 82 kWh"],
+        "battery_suppliers": ["LG Energy Solution", "SK On"],
+        "problems": [{"issue": "Software", "years": "2021–2022"}],
+        "recalls": ["KBA 16271R"],
+        "buying_tips": [{"tip": "Update prüfen"}],
+        "best_year": {"year": "2023"},
+        "sources": ["https://www.goingelectric.de/test", {"title": "ADAC", "url": "https://adac.de/x"}],
+    }
+    md = await generate_guide(
+        "Volkswagen", "ID.4",
+        provider=_FakeProvider(messy), firecrawl=_FakeFirecrawl(),
+    )
+    assert "## Variants & specs" in md
+    assert "Pro" in md and "77 kWh" in md
+    assert "KBA 16271R" in md
+    assert "https://www.goingelectric.de/test" in md  # bare-string source rendered
+
+
 async def test_generate_guide_resilient_when_no_sources():
     class _EmptyFirecrawl:
         async def search(self, query, *, limit=6):
