@@ -143,6 +143,12 @@ def _build_conditions(
     battery_kwh_max: float | None,
     battery_soh_min: int | None,
     deal_score_min: float | None,
+    power_kw_min: int | None = None,
+    power_kw_max: int | None = None,
+    fair_price_min: int | None = None,
+    fair_price_max: int | None = None,
+    km_per_year_max: int | None = None,
+    location: str | None = None,
     favorites_only: bool = False,
 ) -> list:
     """Shared WHERE-clause builder for /listings and /listings/facets so both apply
@@ -202,6 +208,30 @@ def _build_conditions(
         conditions.append(Listing.battery_soh_pct >= battery_soh_min)
     if deal_score_min is not None:
         conditions.append(Listing.deal_score >= deal_score_min)
+    if power_kw_min is not None:
+        conditions.append(Listing.power_kw >= power_kw_min)
+    if power_kw_max is not None:
+        conditions.append(Listing.power_kw <= power_kw_max)
+    if fair_price_min is not None:
+        conditions.append(Listing.fair_price_estimate >= fair_price_min)
+    if fair_price_max is not None:
+        conditions.append(Listing.fair_price_estimate <= fair_price_max)
+    if location:
+        like = f"%{location.lower()}%"
+        conditions.append(
+            func.lower(Listing.location_city).like(like)
+            | func.lower(Listing.location_plz).like(like)
+            | func.lower(Listing.location_raw).like(like)
+        )
+    if km_per_year_max is not None:
+        # km/year is derived (mileage / age), not stored. Rearrange to avoid division:
+        #   mileage_km / (current_year - year) <= max  ==>  mileage_km <= max * age
+        # Only meaningful for rows with a known year/mileage and age >= 1 year.
+        age = datetime.now().year - Listing.year
+        conditions.append(Listing.year.is_not(None))
+        conditions.append(Listing.mileage_km.is_not(None))
+        conditions.append(age >= 1)
+        conditions.append(Listing.mileage_km <= km_per_year_max * age)
     return conditions
 
 
@@ -226,6 +256,12 @@ def listing_facets(
     battery_kwh_max: float | None = None,
     battery_soh_min: int | None = None,
     deal_score_min: float | None = None,
+    power_kw_min: int | None = None,
+    power_kw_max: int | None = None,
+    fair_price_min: int | None = None,
+    fair_price_max: int | None = None,
+    km_per_year_max: int | None = None,
+    location: str | None = None,
     favorites_only: bool = False,
 ) -> FacetsResponse:
     """Distinct models/variants (with counts) and the battery-kWh range present in the
@@ -237,7 +273,10 @@ def listing_facets(
         year_min=year_min, year_max=year_max, price_min=price_min, price_max=price_max,
         mileage_max=mileage_max, battery_kwh_min=battery_kwh_min,
         battery_kwh_max=battery_kwh_max, battery_soh_min=battery_soh_min,
-        deal_score_min=deal_score_min, favorites_only=favorites_only,
+        deal_score_min=deal_score_min, power_kw_min=power_kw_min,
+        power_kw_max=power_kw_max, fair_price_min=fair_price_min,
+        fair_price_max=fair_price_max, km_per_year_max=km_per_year_max,
+        location=location, favorites_only=favorites_only,
     )
 
     def _counts(column) -> list[FacetCount]:
@@ -284,6 +323,12 @@ def list_listings(
     battery_kwh_max: float | None = None,
     battery_soh_min: int | None = None,
     deal_score_min: float | None = None,
+    power_kw_min: int | None = None,
+    power_kw_max: int | None = None,
+    fair_price_min: int | None = None,
+    fair_price_max: int | None = None,
+    km_per_year_max: int | None = None,
+    location: str | None = None,
     favorites_only: bool = False,
     sort: SortField = "scraped_at",
     order: Literal["asc", "desc"] = "desc",
@@ -297,7 +342,10 @@ def list_listings(
         year_min=year_min, year_max=year_max, price_min=price_min, price_max=price_max,
         mileage_max=mileage_max, battery_kwh_min=battery_kwh_min,
         battery_kwh_max=battery_kwh_max, battery_soh_min=battery_soh_min,
-        deal_score_min=deal_score_min, favorites_only=favorites_only,
+        deal_score_min=deal_score_min, power_kw_min=power_kw_min,
+        power_kw_max=power_kw_max, fair_price_min=fair_price_min,
+        fair_price_max=fair_price_max, km_per_year_max=km_per_year_max,
+        location=location, favorites_only=favorites_only,
     )
 
     total = session.exec(

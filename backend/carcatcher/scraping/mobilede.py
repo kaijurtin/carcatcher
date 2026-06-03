@@ -198,11 +198,29 @@ def _make_id(make: str | None) -> int | None:
     return mid
 
 
+# mobile.de fuel-type URL param (`ft`). Verified live: `ft=ELECTRICITY` narrows the
+# result set to EVs. Without it the `ms` make filter returns the whole catalogue
+# (petrol Golfs etc.), so electric searches surfaced nothing. mobile.de does NOT
+# honour a free-text model in `ms` (`ms=<makeId>;;<model>` was verified to be
+# ignored), so fuel is the only reliable URL-level narrowing we have.
+_FT_PARAM = {
+    "electric": "ELECTRICITY",
+    "petrol": "PETROL",
+    "diesel": "DIESEL",
+    "hybrid": "HYBRID",
+    "lpg": "LPG",
+    "cng": "CNG",
+}
+
+
 def build_search_url(filters: StructuredFilters, page: int = 1) -> str:
     params = [("isSearchRequest", "true"), ("s", "Car"), ("vc", "Car"), ("pageNumber", str(page))]
     mid = _make_id(filters.make)
     if mid is not None:
-        params.append(("ms", str(mid)))  # make targeting (model IDs are per-make; not used)
+        params.append(("ms", str(mid)))  # make targeting (mobile.de ignores free-text model)
+    ft = _FT_PARAM.get((filters.fuel or "").strip().lower())
+    if ft is not None:
+        params.append(("ft", ft))
     if filters.price_min is not None:
         params.append(("price:from", str(filters.price_min)))
     if filters.price_max is not None:

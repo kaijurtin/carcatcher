@@ -15,19 +15,33 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "mobilede", label: "mobile.de" },
 ];
 
+const SELLER_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All sellers" },
+  { value: "private", label: "Privat" },
+  { value: "dealer", label: "Händler" },
+];
+
 /** Column filters that map 1:1 onto the /api/listings query params. */
 export interface TableFilters {
   model?: string;
   variant?: string;
   price_min?: number;
   price_max?: number;
+  fair_price_min?: number;
+  fair_price_max?: number;
   year_min?: number;
   year_max?: number;
   mileage_max?: number;
+  km_per_year_max?: number;
+  power_kw_min?: number;
+  power_kw_max?: number;
   battery_kwh_min?: number;
   battery_kwh_max?: number;
   battery_soh_min?: number;
+  deal_score_min?: number;
+  seller_type?: string;
   source?: string;
+  location?: string;
   favorites_only?: boolean;
 }
 
@@ -126,12 +140,15 @@ export function ListingsTable({
             <th className="px-4 py-3 font-medium">Model</th>
             <th className="px-4 py-3 font-medium">Variant</th>
             <th className="px-4 py-3 font-medium">Battery</th>
+            <th className="px-4 py-3 font-medium">Power</th>
             <SortableHeader label="Mileage" field="mileage_km" sort={sort} order={order} onSort={onSort} />
             <SortableHeader label="Year" field="year" sort={sort} order={order} onSort={onSort} />
             <SortableHeader label="Price" field="price" sort={sort} order={order} onSort={onSort} />
+            <th className="px-4 py-3 font-medium">Fair price</th>
             <SortableHeader label="Deal" field="deal_score" sort={sort} order={order} onSort={onSort} />
             <th className="px-4 py-3 font-medium">SoH</th>
             <th className="px-4 py-3 font-medium">km/Jahr</th>
+            <th className="px-4 py-3 font-medium">Seller</th>
             <th className="px-4 py-3 font-medium">Source</th>
             <th className="px-4 py-3 font-medium">Location</th>
             <th className="px-4 py-3 font-medium" />
@@ -176,6 +193,16 @@ export function ListingsTable({
                 />
               </th>
               <th className="px-4 py-2">
+                <RangeInputs
+                  label="Power kW"
+                  min={f.power_kw_min}
+                  max={f.power_kw_max}
+                  onMin={(v) => set({ power_kw_min: v })}
+                  onMax={(v) => set({ power_kw_max: v })}
+                  width="w-16"
+                />
+              </th>
+              <th className="px-4 py-2">
                 <input
                   type="number"
                   inputMode="numeric"
@@ -205,7 +232,26 @@ export function ListingsTable({
                   onMax={(v) => set({ price_max: v })}
                 />
               </th>
-              <th className="px-4 py-2" />
+              <th className="px-4 py-2">
+                <RangeInputs
+                  label="Fair price"
+                  min={f.fair_price_min}
+                  max={f.fair_price_max}
+                  onMin={(v) => set({ fair_price_min: v })}
+                  onMax={(v) => set({ fair_price_max: v })}
+                />
+              </th>
+              <th className="px-4 py-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  aria-label="Deal score min"
+                  placeholder="min"
+                  value={f.deal_score_min ?? ""}
+                  onChange={(e) => set({ deal_score_min: num(e.target.value) })}
+                  className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"
+                />
+              </th>
               <th className="px-4 py-2">
                 <input
                   type="number"
@@ -217,7 +263,31 @@ export function ListingsTable({
                   className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"
                 />
               </th>
-              <th className="px-4 py-2" />
+              <th className="px-4 py-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  aria-label="km per year max"
+                  placeholder="max"
+                  value={f.km_per_year_max ?? ""}
+                  onChange={(e) => set({ km_per_year_max: num(e.target.value) })}
+                  className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"
+                />
+              </th>
+              <th className="px-4 py-2">
+                <select
+                  aria-label="Filter seller"
+                  value={f.seller_type ?? ""}
+                  onChange={(e) => set({ seller_type: e.target.value || undefined })}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"
+                >
+                  {SELLER_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </th>
               <th className="px-4 py-2">
                 <select
                   aria-label="Filter source"
@@ -232,7 +302,16 @@ export function ListingsTable({
                   ))}
                 </select>
               </th>
-              <th className="px-4 py-2" />
+              <th className="px-4 py-2">
+                <input
+                  type="text"
+                  aria-label="Filter location"
+                  placeholder="city / PLZ"
+                  value={f.location ?? ""}
+                  onChange={(e) => set({ location: e.target.value || undefined })}
+                  className="w-28 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"
+                />
+              </th>
               <th className="px-4 py-2" />
             </tr>
           )}
@@ -240,7 +319,7 @@ export function ListingsTable({
         <tbody className="divide-y divide-slate-100">
           {items.length === 0 ? (
             <tr>
-              <td colSpan={16} className="px-4 py-12 text-center text-slate-500">
+              <td colSpan={18} className="px-4 py-12 text-center text-slate-500">
                 No listings match these filters.
               </td>
             </tr>
@@ -300,6 +379,9 @@ export function ListingsTable({
                   {l.battery_kwh ? `${l.battery_kwh} kWh` : "—"}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                  {l.power_kw != null ? `${l.power_kw} kW` : "—"}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {formatKm(l.mileage_km)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
@@ -310,6 +392,11 @@ export function ListingsTable({
                   {l.price_negotiable && (
                     <span className="ml-1 text-xs font-normal text-slate-400">VB</span>
                   )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                  {l.fair_price_estimate != null
+                    ? `${l.fair_price_estimate.toLocaleString("de-DE")} €`
+                    : "—"}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <DealScoreBadge listing={l} />
@@ -325,6 +412,13 @@ export function ListingsTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {formatKmPerYear(l.mileage_km, l.year)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                  {l.seller_type === "private"
+                    ? "Privat"
+                    : l.seller_type === "dealer"
+                      ? "Händler"
+                      : "—"}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                   {SOURCE_LABEL[l.source] ?? l.source}

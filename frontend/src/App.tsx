@@ -32,10 +32,14 @@ export default function App() {
     };
   }, []);
 
+  // The dashboard's wide listings table needs the full screen; other views read
+  // better at a comfortable reading width.
+  const containerWidth = view === "dashboard" ? "max-w-[1800px]" : "max-w-6xl";
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className={`mx-auto flex ${containerWidth} items-center justify-between px-6 py-4`}>
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-semibold tracking-tight">🚗 CarCatcher</h1>
             <nav className="flex gap-1">
@@ -47,7 +51,7 @@ export default function App() {
           <HealthPill state={health} />
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className={`mx-auto ${containerWidth} px-6 py-8`}>
         {view === "dashboard" && <Dashboard onOpenGuide={openGuide} />}
         {view === "searches" && <SavedSearches />}
         {view === "models" && (

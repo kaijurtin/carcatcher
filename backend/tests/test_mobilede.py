@@ -93,3 +93,16 @@ def test_build_search_url_make_targeting():
     assert "ms=17200" in build_search_url(StructuredFilters(make="Mercedes-Benz"))
     # unknown make -> no ms param (broad crawl; Phase-A filter narrows later)
     assert "ms=" not in build_search_url(StructuredFilters(make="Wuling"))
+
+
+def test_build_search_url_electric_fuel_filter():
+    # Verified live: without ft, an ms=<makeId> search returns the whole catalogue
+    # (petrol Golfs etc.). ft=ELECTRICITY is what scopes mobile.de to EVs.
+    url = build_search_url(StructuredFilters(make="VW", fuel="electric"))
+    assert "ms=25200" in url
+    assert "ft=ELECTRICITY" in url
+
+
+def test_build_search_url_no_fuel_param_when_unset():
+    # No fuel in the search -> no ft param (mobile.de stays unconstrained on fuel).
+    assert "ft=" not in build_search_url(StructuredFilters(make="VW"))

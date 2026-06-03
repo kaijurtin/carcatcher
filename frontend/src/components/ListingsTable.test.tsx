@@ -214,3 +214,55 @@ test("shows a no-matches row (not the crawl CTA) when filtering yields nothing",
   render(<ListingsTable items={[]} filters={{}} onFilterChange={() => {}} />);
   expect(screen.getByText(/No listings match these filters/)).toBeInTheDocument();
 });
+
+test("renders the Power, Fair price and Seller columns", () => {
+  render(
+    <ListingsTable
+      items={[
+        listing({
+          power_kw: 150,
+          fair_price_estimate: 24500,
+          seller_type: "dealer",
+        }),
+      ]}
+    />,
+  );
+  // "150 kW" appears in both the Model spec sub-line and the dedicated Power column.
+  expect(screen.getAllByText("150 kW").length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText(/24\.500\s*€/)).toBeInTheDocument(); // de-DE grouping
+  expect(screen.getByText("Händler")).toBeInTheDocument();
+});
+
+test("exposes filter inputs for every filterable column", () => {
+  render(
+    <ListingsTable items={[listing({})]} filters={{}} onFilterChange={() => {}} />,
+  );
+  expect(screen.getByLabelText("Power kW min")).toBeInTheDocument();
+  expect(screen.getByLabelText("Fair price min")).toBeInTheDocument();
+  expect(screen.getByLabelText("Deal score min")).toBeInTheDocument();
+  expect(screen.getByLabelText("km per year max")).toBeInTheDocument();
+  expect(screen.getByLabelText("Filter seller")).toBeInTheDocument();
+  expect(screen.getByLabelText("Filter location")).toBeInTheDocument();
+});
+
+test("editing the location filter calls onFilterChange", () => {
+  const onFilterChange = vi.fn();
+  render(
+    <ListingsTable items={[listing({})]} filters={{}} onFilterChange={onFilterChange} />,
+  );
+  fireEvent.change(screen.getByLabelText("Filter location"), {
+    target: { value: "Berlin" },
+  });
+  expect(onFilterChange).toHaveBeenCalledWith({ location: "Berlin" });
+});
+
+test("selecting a seller type calls onFilterChange", () => {
+  const onFilterChange = vi.fn();
+  render(
+    <ListingsTable items={[listing({})]} filters={{}} onFilterChange={onFilterChange} />,
+  );
+  fireEvent.change(screen.getByLabelText("Filter seller"), {
+    target: { value: "private" },
+  });
+  expect(onFilterChange).toHaveBeenCalledWith({ seller_type: "private" });
+});
