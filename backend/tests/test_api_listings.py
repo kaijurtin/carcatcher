@@ -119,6 +119,24 @@ def test_filter_by_location_substring_case_insensitive(client):
     assert plz["items"][0]["location_city"] == "München"
 
 
+def test_filter_by_variant_substring_case_insensitive(client):
+    with Session(get_engine()) as s:
+        s.add_all(
+            [
+                Listing(source="kleinanzeigen", source_id="v1", url="uv1",
+                        raw_title="ID.4 Pro", model="ID.4", variant="Pro Performance"),
+                Listing(source="kleinanzeigen", source_id="v2", url="uv2",
+                        raw_title="ID.3 Pro S", model="ID.3", variant="Pro S"),
+                Listing(source="kleinanzeigen", source_id="v3", url="uv3",
+                        raw_title="ID.4 GTX", model="ID.4", variant="GTX"),
+            ]
+        )
+        s.commit()
+    body = client.get("/api/listings", params={"variant": "pro"}).json()
+    variants = sorted(i["variant"] for i in body["items"])
+    assert variants == ["Pro Performance", "Pro S"]  # GTX excluded, case-insensitive
+
+
 def test_filter_by_km_per_year_max(client):
     with Session(get_engine()) as s:
         _seed_specs(s)

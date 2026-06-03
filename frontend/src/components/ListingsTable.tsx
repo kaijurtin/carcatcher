@@ -177,7 +177,7 @@ export function ListingsTable({
                 <input
                   type="text"
                   aria-label="Filter variant"
-                  placeholder="e.g. GTX"
+                  placeholder="contains, e.g. Pro"
                   value={f.variant ?? ""}
                   onChange={(e) => set({ variant: e.target.value || undefined })}
                   className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-normal text-slate-700"

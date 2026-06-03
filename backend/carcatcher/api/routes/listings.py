@@ -183,7 +183,8 @@ def _build_conditions(
     if model:
         conditions.append(Listing.model == model)
     if variant:
-        conditions.append(func.lower(Listing.variant) == variant.lower())
+        # Case-insensitive "contains": typing "pro" matches "Pro S", "Pro Performance", etc.
+        conditions.append(func.lower(Listing.variant).like(f"%{variant.lower()}%"))
     if fuel:
         conditions.append(Listing.fuel == fuel)
     if transmission:
