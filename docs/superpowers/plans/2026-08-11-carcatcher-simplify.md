@@ -2272,7 +2272,10 @@ git commit -m "feat: rewrite RefreshControls for synchronous refresh; drop cron-
 - Create: `frontend/src/App.test.tsx` (replaces existing content entirely)
 - Delete: `frontend/src/pages/ModelGuides.tsx`, `ModelGuides.test.tsx`, `SavedSearches.tsx`, `SavedSearches.test.tsx`
 - Delete: `frontend/src/components/ListingDetailDrawer.tsx`, `.test.tsx`, `RecommendationPanel.tsx`, `.test.tsx`, `DealScoreBadge.tsx`, `.test.tsx`, `AiToggle.tsx`, `.test.tsx`, `SearchBar.tsx`, `.test.tsx`
+- Delete: `frontend/src/lib/savedSearch.ts` (added by amendment below — a gap in the original plan)
 - Modify: `frontend/package.json`
+
+**Amendment (added after Task 9's review flagged a wider blast radius than the original brief named):** `frontend/src/lib/savedSearch.ts` was never scheduled for deletion anywhere in this plan. Its only consumer is `SavedSearches.tsx`, deleted by this task — so it becomes dead code the moment this task's other deletions land. Delete it alongside the files above.
 
 **Interfaces:**
 - Consumes: `ListingsTable`/`TableFilters` (Task 10), `RefreshControls` (Task 11), `useListings`/`useDebounce`/`getHealth` (Task 9).
@@ -2486,15 +2489,18 @@ git rm frontend/src/pages/ModelGuides.tsx frontend/src/pages/ModelGuides.test.ts
        frontend/src/components/RecommendationPanel.tsx frontend/src/components/RecommendationPanel.test.tsx \
        frontend/src/components/DealScoreBadge.tsx frontend/src/components/DealScoreBadge.test.tsx \
        frontend/src/components/AiToggle.tsx frontend/src/components/AiToggle.test.tsx \
-       frontend/src/components/SearchBar.tsx frontend/src/components/SearchBar.test.tsx
+       frontend/src/components/SearchBar.tsx frontend/src/components/SearchBar.test.tsx \
+       frontend/src/lib/savedSearch.ts
 ```
 
 - [ ] **Step 8: Trim `frontend/package.json`** — remove `react-markdown`, `recharts`, `remark-gfm` from `dependencies` (confirmed orphaned in Step 1), keep everything else unchanged.
 
 - [ ] **Step 9: Reinstall and run type-check + full frontend test suite**
 
-Run: `cd frontend && npm install && npx tsc --noEmit && npx vitest run`
-Expected: `tsc` reports zero errors; every remaining test file passes, including the new `Dashboard.test.tsx` and `App.test.tsx`.
+**Type-check gotcha (found during Task 9's review):** this project's root `tsconfig.json` uses TypeScript project references (`"files": []`, only `"references"`) — a bare `npx tsc --noEmit` is a silent no-op that checks nothing and always exits 0, regardless of real errors. Use build mode instead, and clear the incremental cache first so it can't mask something stale:
+
+Run: `cd frontend && npm install && rm -f tsconfig.app.tsbuildinfo tsconfig.node.tsbuildinfo && npx tsc -b --force && npx vitest run`
+Expected: `tsc -b --force` exits 0 with zero errors; every remaining test file passes, including the new `Dashboard.test.tsx` and `App.test.tsx`.
 
 - [ ] **Step 10: Commit**
 
@@ -2512,7 +2518,9 @@ git commit -m "feat: rewrite Dashboard/App as single-view; delete AI/saved-searc
 
 - [ ] **Step 1: Full type-check**
 
-Run: `cd frontend && npx tsc --noEmit`
+Use build mode, not bare `tsc --noEmit` — see Task 12 Step 9's note on why (project references make the bare form a silent no-op).
+
+Run: `cd frontend && rm -f tsconfig.app.tsbuildinfo tsconfig.node.tsbuildinfo && npx tsc -b --force`
 Expected: zero errors.
 
 - [ ] **Step 2: Full test suite**
