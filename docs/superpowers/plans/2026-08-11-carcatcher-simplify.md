@@ -1513,7 +1513,8 @@ git commit -m "feat: rewrite API to 2 endpoints (listings, refresh); drop AI/sav
 
 **Files:**
 - Delete: `backend/carcatcher/ai/`, `backend/carcatcher/scoring/`, `backend/carcatcher/normalization/`, `backend/carcatcher/research/`, `backend/carcatcher/scheduler/`, `backend/carcatcher/pipeline/`, `backend/carcatcher/settings_store.py`, `backend/model_guides/`
-- Delete: all now-orphaned test files (list in Step 2)
+- Delete: `backend/carcatcher/queries.py` (added by Amendment 2 below — a gap in the original plan)
+- Delete: all now-orphaned test files (list in Step 2), including `backend/tests/test_snapshot.py` (added by Amendment 2 below)
 - Modify: `backend/carcatcher/scraping/base.py` — remove the deprecated backwards-compat shim (see Step 2a)
 - Modify: `backend/carcatcher/scraping/autoscout24.py` — remove the deprecated `AutoScout24Scraper` alias (see Step 2a)
 - Modify: `backend/tests/conftest.py`
@@ -1522,7 +1523,9 @@ git commit -m "feat: rewrite API to 2 endpoints (listings, refresh); drop AI/sav
 
 **Interfaces:** none new — this task only removes dead code and confirms nothing still imports it.
 
-**Amendment (added after Task 3's implementer hit a blocker; see Task 3's Amendment 2):** Task 1 left a temporary `# DEPRECATED` shim in `base.py`/`autoscout24.py` (`ListingStub`, `RawPage`, `Scraper`, `sha256_text`, and an `AutoScout24Scraper` alias) because `kleinanzeigen.py`/`mobilede.py` needed it. Those were deleted in Task 3, but a repo-wide grep found the shim's *actual* last consumers are `carcatcher/pipeline/run.py` and `backend/tests/test_multisource.py` — both deleted in this task's Step 2. **This task is therefore where the shim finally gets removed.** Step 2a below does that; do it right after Step 2's deletions, before touching `conftest.py`.
+**Amendment 1 (added after Task 3's implementer hit a blocker; see Task 3's Amendment 2):** Task 1 left a temporary `# DEPRECATED` shim in `base.py`/`autoscout24.py` (`ListingStub`, `RawPage`, `Scraper`, `sha256_text`, and an `AutoScout24Scraper` alias) because `kleinanzeigen.py`/`mobilede.py` needed it. Those were deleted in Task 3, but a repo-wide grep found the shim's *actual* last consumers are `carcatcher/pipeline/run.py` and `backend/tests/test_multisource.py` — both deleted in this task's Step 2. **This task is therefore where the shim finally gets removed.** Step 2a below does that; do it right after Step 2's deletions, before touching `conftest.py`.
+
+**Amendment 2 (added after Task 7's implementer's Step 1 grep surfaced two more gaps):** Two files were never scheduled for deletion anywhere in the original plan, and are now confirmed dead: `backend/carcatcher/queries.py` (imports `carcatcher.normalization.makes` and `carcatcher.schemas`, both deleted; its only importers are `carcatcher/scoring/candidates.py` — deleted in this task's Step 2 — and `test_battery_search.py`/`test_nl_recommend.py`, both already in Step 2's deletion list) and `backend/tests/test_snapshot.py` (imports `CrawlRun`/`ListingSearch`/`RunStatus`/`SavedSearch`/`Shortlist`/`ShortlistItem` from `db.models`, all removed by Task 4; it tested `pipeline/snapshot.py`'s mark-gone/prune logic, superseded by `crawl.py`'s `_mark_gone` in Task 5). Both are added to Step 2's deletion command below.
 
 - [ ] **Step 1: Grep for any remaining references to the packages about to be deleted**
 
@@ -1537,6 +1540,7 @@ git rm -r backend/carcatcher/ai backend/carcatcher/scoring backend/carcatcher/no
           backend/carcatcher/research backend/carcatcher/scheduler backend/carcatcher/pipeline \
           backend/model_guides
 git rm backend/carcatcher/settings_store.py
+git rm backend/carcatcher/queries.py
 git rm backend/tests/fakes.py
 git rm backend/tests/test_ai_client.py backend/tests/test_evaluate.py backend/tests/test_extractor.py \
        backend/tests/test_guide_categorizer.py backend/tests/test_guide_generator.py \
@@ -1549,7 +1553,7 @@ git rm backend/tests/test_ai_client.py backend/tests/test_evaluate.py backend/te
        backend/tests/test_search_match.py backend/tests/test_search_scoped.py \
        backend/tests/test_settings_api.py backend/tests/test_baseline.py \
        backend/tests/test_battery.py backend/tests/test_battery_search.py \
-       backend/tests/test_favorites.py
+       backend/tests/test_favorites.py backend/tests/test_snapshot.py
 ```
 
 If any `git rm` above errors with "pathspec did not match" (file already gone or never existed under that exact name), run `git status` to see the real filename and adjust — do not silently skip verifying the corresponding source module is actually deleted.
