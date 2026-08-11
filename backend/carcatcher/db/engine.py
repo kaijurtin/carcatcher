@@ -40,40 +40,10 @@ def set_engine(engine: Engine) -> None:
     _engine = engine
 
 
-# Columns added to existing tables after their first creation. `create_all` only
-# creates missing *tables*, never missing *columns*, and this project has no Alembic —
-# so newly added model columns must be backfilled onto already-deployed SQLite DBs.
-_ADDED_COLUMNS: dict[str, dict[str, str]] = {
-    "listing": {
-        "battery_kwh": "FLOAT",
-        "battery_soh_pct": "INTEGER",
-        "model_locked": "BOOLEAN NOT NULL DEFAULT 0",
-    },
-}
-
-
-def _ensure_added_columns(engine: Engine) -> None:
-    """Idempotently add any model columns missing from an existing table (SQLite)."""
-    with engine.connect() as conn:
-        for table, columns in _ADDED_COLUMNS.items():
-            existing = {
-                row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")
-            }
-            if not existing:
-                continue  # table absent — create_all will have made it fresh with all cols
-            for name, sqltype in columns.items():
-                if name not in existing:
-                    conn.exec_driver_sql(
-                        f"ALTER TABLE {table} ADD COLUMN {name} {sqltype}"
-                    )
-        conn.commit()
-
-
 def init_db() -> None:
-    """Create all tables if they do not yet exist, then backfill any added columns."""
+    """Create all tables if they do not yet exist."""
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
-    _ensure_added_columns(engine)
 
 
 def get_session() -> Iterator[Session]:
