@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Listing } from "../types";
 import { formatKm, formatPrice, formatYear } from "../lib/format";
 
@@ -30,6 +31,40 @@ export interface TableFilters {
 
 const num = (v: string): number | undefined => (v.trim() === "" ? undefined : Number(v));
 
+type SortField =
+  | "model"
+  | "trim"
+  | "price_eur"
+  | "mileage_km"
+  | "year"
+  | "power_kw"
+  | "condition"
+  | "location"
+  | "source";
+
+interface SortState {
+  field: SortField;
+  direction: "asc" | "desc";
+}
+
+const TEXT_SORT_FIELDS = new Set<SortField>(["model", "trim", "condition", "location", "source"]);
+
+function compareValues(av: unknown, bv: unknown, isText: boolean, direction: "asc" | "desc"): number {
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1; // nulls always sort last, regardless of direction
+  if (bv == null) return -1;
+  const cmp = isText
+    ? String(av).localeCompare(String(bv), "de")
+    : (av as number) - (bv as number);
+  return direction === "asc" ? cmp : -cmp;
+}
+
+function sortListings(items: Listing[], sort: SortState | null): Listing[] {
+  if (!sort) return items;
+  const isText = TEXT_SORT_FIELDS.has(sort.field);
+  return [...items].sort((a, b) => compareValues(a[sort.field], b[sort.field], isText, sort.direction));
+}
+
 interface ListingsTableProps {
   items: Listing[];
   filters: TableFilters;
@@ -40,20 +75,28 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
   const f = filters;
   const set = (patch: Partial<TableFilters>) => onFilterChange({ ...f, ...patch });
 
+  const [sort, setSort] = useState<SortState | null>(null);
+  const onSort = (field: SortField) => {
+    setSort((prev) =>
+      prev?.field === field ? { field, direction: prev.direction === "asc" ? "desc" : "asc" } : { field, direction: "asc" },
+    );
+  };
+  const sortedItems = sortListings(items, sort);
+
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-left text-sm">
         <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="px-4 py-3 font-medium">Model</th>
-            <th className="px-4 py-3 font-medium">Trim</th>
-            <th className="px-4 py-3 font-medium">Price</th>
-            <th className="px-4 py-3 font-medium">KM</th>
-            <th className="px-4 py-3 font-medium">Year</th>
-            <th className="px-4 py-3 font-medium">Power</th>
-            <th className="px-4 py-3 font-medium">Condition</th>
-            <th className="px-4 py-3 font-medium">Location</th>
-            <th className="px-4 py-3 font-medium">Source</th>
+            <SortableHeader label="Model" field="model" sort={sort} onSort={onSort} />
+            <SortableHeader label="Trim" field="trim" sort={sort} onSort={onSort} />
+            <SortableHeader label="Price" field="price_eur" sort={sort} onSort={onSort} />
+            <SortableHeader label="KM" field="mileage_km" sort={sort} onSort={onSort} />
+            <SortableHeader label="Year" field="year" sort={sort} onSort={onSort} />
+            <SortableHeader label="Power" field="power_kw" sort={sort} onSort={onSort} />
+            <SortableHeader label="Condition" field="condition" sort={sort} onSort={onSort} />
+            <SortableHeader label="Location" field="location" sort={sort} onSort={onSort} />
+            <SortableHeader label="Source" field="source" sort={sort} onSort={onSort} />
             <th className="px-4 py-3 font-medium" />
           </tr>
           <tr className="border-t border-slate-200 bg-white text-slate-600 normal-case tracking-normal">
@@ -132,7 +175,7 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
               </td>
             </tr>
           ) : (
-            items.map((l) => (
+            sortedItems.map((l) => (
               <tr key={l.id} className="hover:bg-slate-50">
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
                   {MODEL_LABEL[l.model] ?? l.model}
@@ -173,5 +216,33 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  field,
+  sort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  sort: SortState | null;
+  onSort: (field: SortField) => void;
+}) {
+  const active = sort?.field === field;
+  const arrow = active ? (sort?.direction === "asc" ? " ▲" : " ▼") : "";
+  return (
+    <th className="px-4 py-3 font-medium">
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        aria-label={`Sort by ${label}`}
+        className={`uppercase tracking-wide ${active ? "text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+      >
+        {label}
+        {arrow}
+      </button>
+    </th>
   );
 }
