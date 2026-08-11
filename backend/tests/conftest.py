@@ -10,7 +10,6 @@ from sqlmodel import SQLModel, create_engine
 from carcatcher import config
 from carcatcher.config import Settings
 from carcatcher.db import engine as db_engine
-from carcatcher.main import create_app
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +43,8 @@ def test_engine():
 
 @pytest.fixture()
 def client(test_engine):
+    from carcatcher.main import create_app
+
     app = create_app()
     with TestClient(app) as c:
         yield c
