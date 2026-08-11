@@ -1,46 +1,38 @@
-"""AutoScout24.de scraper (source: "autoscout24").
+"""AutoScout24.de parser (source: "autoscout24").
 
-AS24 is a Next.js app: the search results are in the __NEXT_DATA__ JSON
-(props.pageProps.listings) with structured fields. We parse that JSON rather than the
-DOM (robust) and use it as a seed via basic_specs; the agent (P2) still decides
-make/model/variant from the announcement text so the model facet stays agent-decided.
+Plain HTTP GET — no rendering needed. AS24 is a Next.js app that embeds its search
+results as a `<script id="__NEXT_DATA__">` JSON blob in the initial server-rendered
+HTML (verified live 2026-08-11: a plain `curl` with a browser-like User-Agent
+returns it directly, no headless browser required).
 """
 
 from __future__ import annotations
 
-import json
-import logging
 import re
-from collections.abc import AsyncIterator
 
+import httpx
 from bs4 import BeautifulSoup
 
-from carcatcher.scraping.base import ListingStub, RawPage, Scraper
-from carcatcher.scraping.firecrawl_client import FirecrawlClient
-from carcatcher.schemas import StructuredFilters
-
-logger = logging.getLogger(__name__)
+from carcatcher.scraping.base import Model, Parser, RawListing
 
 SOURCE = "autoscout24"
 BASE_URL = "https://www.autoscout24.de"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
 
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_MODEL_SLUGS: dict[Model, str] = {"id3": "id-3", "id4": "id-4"}
 _DIGITS_RE = re.compile(r"\d[\d.]*")
 _UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
-
-_FUEL_MAP = {
-    "benzin": "petrol", "diesel": "diesel", "elektro": "electric",
-    "hybrid": "hybrid", "autogas (lpg)": "lpg", "lpg": "lpg",
-    "erdgas (cng)": "cng", "cng": "cng",
-}
-_TRANSMISSION_MAP = {
-    "automatik": "automatic", "schaltgetriebe": "manual",
-    "halbautomatik": "automatic", "manuell": "manual",
-}
+_POWER_RE = re.compile(r"(\d+)\s*kW")
+_YEAR_RE = re.compile(r"(\d{4})")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]")
 
 
-def _slug(text: str) -> str:
-    return _SLUG_RE.sub("-", text.lower().strip()).strip("-")
+def _normalize_model_code(text: str | None) -> str:
+    """Lowercase and strip non-alphanumerics, e.g. "ID.4" -> "id4"."""
+    return _NON_ALNUM_RE.sub("", (text or "").lower())
 
 
 def _to_int(text: str | None) -> int | None:
@@ -53,171 +45,99 @@ def _to_int(text: str | None) -> int | None:
     return int(digits) if digits.isdigit() else None
 
 
-def _map_fuel(text: str | None) -> str | None:
-    return _FUEL_MAP.get((text or "").strip().lower())
-
-
-def _map_transmission(text: str | None) -> str | None:
-    return _TRANSMISSION_MAP.get((text or "").strip().lower())
-
-
-def _parse_power_kw(text: str | None) -> int | None:
-    # "140 kW (190 PS)" -> 140
-    if not text:
-        return None
-    m = re.search(r"(\d+)\s*kW", text)
-    return int(m.group(1)) if m else None
-
-
-def _year_from_calendar(text: str | None) -> int | None:
-    # "02/2024" -> 2024
-    if not text:
-        return None
-    m = re.search(r"(\d{4})", text)
-    return int(m.group(1)) if m else None
-
-
-def _details_map(vehicle_details: list) -> dict:
-    """Map AS24 vehicleDetails (icon/data pairs) to our fields."""
+def _details(vehicle_details: list) -> dict:
     out: dict = {}
     for d in vehicle_details or []:
         icon, value = d.get("iconName"), d.get("data")
         if icon == "mileage_odometer":
             out["mileage_km"] = _to_int(value)
         elif icon == "calendar":
-            out["year"] = _year_from_calendar(value)
+            m = _YEAR_RE.search(value or "")
+            out["year"] = int(m.group(1)) if m else None
         elif icon == "speedometer":
-            out["power_kw"] = _parse_power_kw(value)
+            m = _POWER_RE.search(value or "")
+            out["power_kw"] = int(m.group(1)) if m else None
     return out
 
 
-def _listing_to_stub(item: dict) -> ListingStub | None:
-    vehicle = item.get("vehicle") or {}
-    make = vehicle.get("make")
-    model = vehicle.get("model")
+def _source_id(url: str) -> str:
+    m = _UUID_RE.search(url)
+    return m.group(1) if m else url.rstrip("/").rsplit("/", 1)[-1]
+
+
+def _condition(vehicle: dict) -> str:
+    return "new" if (vehicle.get("offerType") or "").strip().upper() == "N" else "used"
+
+
+def _item_to_listing(item: dict, model: Model) -> RawListing | None:
     if not item.get("id"):
         return None
-
+    vehicle = item.get("vehicle") or {}
+    # AS24 can return off-model vehicles in unfiltered contexts (boosted/sponsored
+    # slots) even when the search URL targets a specific model — guard against
+    # storing them mislabeled as the requested VW ID.3/ID.4.
+    if (vehicle.get("make") or "").strip().lower() != "volkswagen":
+        return None
+    if _normalize_model_code(vehicle.get("model")) != model:
+        return None
     url = item.get("url") or ""
     url = url if url.startswith("http") else f"{BASE_URL}{url}"
-    price_fmt = (item.get("price") or {}).get("priceFormatted")
-    images = item.get("images") or []
+    details = _details(item.get("vehicleDetails") or [])
     loc = item.get("location") or {}
-    details = _details_map(item.get("vehicleDetails") or [])
-
-    title = " ".join(p for p in (make, model, vehicle.get("modelVersionInput")) if p)
-    tags = [
-        t for t in (
-            f"{details.get('mileage_km')} km" if details.get("mileage_km") else None,
-            f"EZ {details.get('year')}" if details.get("year") else None,
-            vehicle.get("fuel"),
-        ) if t
-    ]
-    stub = ListingStub(
+    return RawListing(
         source=SOURCE,
-        source_id=str(item["id"]),
+        source_id=_source_id(url),
         url=url,
-        title=title,
-        price_hint=price_fmt,
-        location_hint=" ".join(p for p in (loc.get("zip"), loc.get("city")) if p) or None,
-        image_hint=images[0] if images else None,
-        tags=tags,
-        description_hint=vehicle.get("subtitle") or vehicle.get("modelVersionInput"),
+        model=model,
+        trim=vehicle.get("modelVersionInput") or vehicle.get("subtitle") or "",
+        price_eur=_to_int((item.get("price") or {}).get("priceFormatted")),
+        mileage_km=details.get("mileage_km"),
+        year=details.get("year"),
+        power_kw=details.get("power_kw"),
+        condition=_condition(vehicle),
+        location=" ".join(p for p in (loc.get("zip"), loc.get("city")) if p) or None,
+        title=" ".join(
+            p for p in (vehicle.get("make"), vehicle.get("model"), vehicle.get("modelVersionInput"))
+            if p
+        ),
     )
-    # Stash the structured fields for basic_specs (avoids re-parsing).
-    stub._as24 = {  # type: ignore[attr-defined]
-        "price": _to_int(price_fmt),
-        "price_negotiable": False,
-        "make": make,
-        "model": model,
-        "variant": vehicle.get("modelVersionInput"),
-        "fuel": _map_fuel(vehicle.get("fuel")),
-        "transmission": _map_transmission(vehicle.get("transmission")),
-        "seller_type": (item.get("seller") or {}).get("type", "").lower() or None,
-        "location_city": loc.get("city"),
-        "location_plz": loc.get("zip"),
-        **details,
-    }
-    return stub
 
 
-def parse_search_html(html: str) -> list[ListingStub]:
+def parse_search_html(html: str, model: Model) -> list[RawListing]:
     soup = BeautifulSoup(html, "html.parser")
     node = soup.find("script", id="__NEXT_DATA__")
     if node is None or not node.string:
         return []
     try:
+        import json
+
         data = json.loads(node.string)
-    except json.JSONDecodeError:
+    except ValueError:
         return []
-    listings = (
-        data.get("props", {}).get("pageProps", {}).get("listings", []) or []
-    )
-    stubs = [_listing_to_stub(item) for item in listings]
-    return [s for s in stubs if s is not None]
+    items = data.get("props", {}).get("pageProps", {}).get("listings", []) or []
+    out = [_item_to_listing(item, model) for item in items]
+    return [l for l in out if l is not None]
 
 
-def build_search_url(filters: StructuredFilters, page: int = 1) -> str:
-    path = "/lst"
-    if filters.make:
-        path += f"/{_slug(filters.make)}"
-        if filters.model:
-            path += f"/{_slug(filters.model)}"
-    params = [("atype", "C"), ("cy", "D"), ("sort", "standard"), ("desc", "0"),
-              ("page", str(page)), ("size", "20")]
-    if filters.price_min is not None:
-        params.append(("pricefrom", str(filters.price_min)))
-    if filters.price_max is not None:
-        params.append(("priceto", str(filters.price_max)))
-    if filters.mileage_max is not None:
-        params.append(("kmto", str(filters.mileage_max)))
-    if filters.year_min is not None:
-        params.append(("fregfrom", str(filters.year_min)))
-    if filters.year_max is not None:
-        params.append(("fregto", str(filters.year_max)))
-    query = "&".join(f"{k}={v}" for k, v in params)
-    return f"{BASE_URL}{path}?{query}"
+def build_search_url(model: Model, page: int) -> str:
+    slug = _MODEL_SLUGS[model]
+    params = "&".join(["atype=C", "cy=D", "sort=standard", "desc=0", f"page={page}", "size=20"])
+    return f"{BASE_URL}/lst/volkswagen/{slug}?{params}"
 
 
-class AutoScout24Scraper(Scraper):
+class AutoScout24Parser(Parser):
     name = SOURCE
-    base_url = BASE_URL
-    # The __NEXT_DATA__ fields are still used as a seed via basic_specs, but the agent
-    # (P2) decides make/model/variant from the announcement text so the dashboard model
-    # facet is agent-categorized consistently across all sources.
-    provides_structured_data = False
 
-    def __init__(self, firecrawl: FirecrawlClient) -> None:
-        self._fc = firecrawl
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self._client = client or httpx.Client(timeout=20.0, headers={"User-Agent": USER_AGENT})
 
-    async def search(
-        self, filters: StructuredFilters, *, max_pages: int
-    ) -> AsyncIterator[ListingStub]:
-        for page in range(1, max_pages + 1):
-            url = build_search_url(filters, page)
-            try:
-                # rawHtml preserves the __NEXT_DATA__ script (cleaned `html` strips it).
-                data = await self._fc.scrape(
-                    url, formats=["rawHtml"], only_main_content=False
-                )
-            except Exception as exc:  # noqa: BLE001 — transient page error shouldn't fail the run
-                logger.warning("autoscout24 page %s failed, stopping paging: %s", page, exc)
+    def fetch_listings(self, model: Model) -> list[RawListing]:
+        results: list[RawListing] = []
+        for page in range(1, 6):  # AS24 pages ~20/each; 5 pages covers this source's v1 volume
+            resp = self._client.get(build_search_url(model, page))
+            resp.raise_for_status()
+            page_listings = parse_search_html(resp.text, model)
+            if not page_listings:
                 break
-            html = data.get("rawHtml") or data.get("html") or ""
-            stubs = parse_search_html(html)
-            if not stubs:
-                break
-            for stub in stubs:
-                yield stub
-
-    async def fetch_detail(self, url: str) -> RawPage:
-        data = await self._fc.scrape(url, formats=["markdown", "html"])
-        return RawPage(url=url, markdown=data.get("markdown", ""), html=data.get("html"))
-
-    def parse_source_id(self, url: str) -> str:
-        m = _UUID_RE.search(url)
-        return m.group(1) if m else url.rstrip("/").rsplit("/", 1)[-1]
-
-    def basic_specs(self, stub: ListingStub) -> dict:
-        specs = getattr(stub, "_as24", {})
-        return {k: v for k, v in specs.items() if v is not None}
+            results.extend(page_listings)
+        return results

@@ -1,8 +1,4 @@
-# CarCatcher stack: api (FastAPI) + ui (nginx/React) + self-hosted Firecrawl.
-#
-# Firecrawl self-hosting (current "harness" image): the firecrawl container runs
-# the API + workers internally and needs Redis + a Postgres ("NUQ") + the Playwright
-# microservice. Pin FIRECRAWL_IMAGE / PLAYWRIGHT_IMAGE in .env to a known-good tag.
+# CarCatcher stack: api (FastAPI) + ui (nginx/React).
 
 services:
   api:
@@ -11,8 +7,6 @@ services:
     env_file: .env
     environment:
       - DATABASE_PATH=/data/db/carcatcher.db
-      # FIRECRAWL_BASE_URL comes from .env: cloud (https://api.firecrawl.dev) by
-      # default, or http://firecrawl-api:3002 when running the `selfhost` profile.
     volumes:
       - ${DATA_DIR:-./data}:/data
     expose:
@@ -31,60 +25,3 @@ services:
     ports:
       # Bound to the LXC; the shared nginx (LXC 111) proxies to this.
       - "${UI_PORT:-8080}:80"
-
-  # --- Firecrawl (self-hosted) ---------------------------------------------
-  firecrawl-redis:
-    profiles: ["selfhost"]
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --save "" --appendonly no
-
-  firecrawl-postgres:
-    profiles: ["selfhost"]
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=firecrawl
-      - POSTGRES_PASSWORD=firecrawl
-      - POSTGRES_DB=nuq
-    volumes:
-      - firecrawl-pgdata:/var/lib/postgresql/data
-
-  firecrawl-rabbitmq:
-    profiles: ["selfhost"]
-    image: rabbitmq:3.13
-    restart: unless-stopped
-    environment:
-      - RABBITMQ_DEFAULT_USER=firecrawl
-      - RABBITMQ_DEFAULT_PASS=firecrawl
-
-  firecrawl-playwright:
-    profiles: ["selfhost"]
-    image: ${PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
-    restart: unless-stopped
-    environment:
-      - PORT=3000
-
-  firecrawl-api:
-    profiles: ["selfhost"]
-    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
-    restart: unless-stopped
-    environment:
-      - REDIS_URL=redis://firecrawl-redis:6379
-      - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
-      - NUQ_DATABASE_URL=postgresql://firecrawl:firecrawl@firecrawl-postgres:5432/nuq
-      - NUQ_RABBITMQ_URL=amqp://firecrawl:firecrawl@firecrawl-rabbitmq:5672
-      - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
-      - USE_DB_AUTHENTICATION=false
-      - PORT=3002
-      - HOST=0.0.0.0
-    depends_on:
-      - firecrawl-redis
-      - firecrawl-postgres
-      - firecrawl-rabbitmq
-      - firecrawl-playwright
-    expose:
-      - "3002"
-
-volumes:
-  firecrawl-pgdata:

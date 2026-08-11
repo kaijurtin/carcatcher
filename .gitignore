@@ -28,3 +28,7 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Git worktrees (superpowers subagent-driven-development scratch workspaces)
+.worktrees/
+.superpowers/

@@ -1,84 +1,46 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getRuns, triggerRefresh } from "../api/client";
-import type { CrawlRun } from "../types";
-import { clearSecret, ensureSecret } from "../lib/secret";
-import { RunStatusPill } from "./RunStatusPill";
-
-const POLL_MS = 3000;
+import { useState } from "react";
+import { refresh } from "../api/client";
+import type { RefreshSummary } from "../types";
 
 export function RefreshControls({ onComplete }: { onComplete?: () => void }) {
-  const [runs, setRuns] = useState<CrawlRun[]>([]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const latest = runs[0] ?? null;
-
-  const loadRuns = useCallback(async () => {
-    try {
-      setRuns(await getRuns(5));
-    } catch {
-      /* ignore — pill simply shows last known state */
-    }
-  }, []);
-
-  useEffect(() => {
-    loadRuns();
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [loadRuns]);
-
-  const startPolling = useCallback(() => {
-    setBusy(true);
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      let latestRuns: CrawlRun[] = [];
-      try {
-        latestRuns = await getRuns(5);
-        setRuns(latestRuns);
-      } catch {
-        return;
-      }
-      if (!latestRuns[0] || latestRuns[0].status !== "running") {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-        setBusy(false);
-        onComplete?.();
-      }
-    }, POLL_MS);
-  }, [onComplete]);
+  const [summary, setSummary] = useState<RefreshSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const onClick = async () => {
-    const secret = ensureSecret();
-    if (!secret) return;
-    setMessage(null);
     setBusy(true);
-    const result = await triggerRefresh(secret);
-    if (result === "unauthorized") {
-      clearSecret();
+    setError(null);
+    setSummary(null);
+    try {
+      const result = await refresh();
+      setSummary(result);
+      onComplete?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
       setBusy(false);
-      setMessage("Wrong secret — click again to re-enter.");
-      return;
     }
-    if (result === "error") {
-      setBusy(false);
-      setMessage("Refresh failed.");
-      return;
-    }
-    startPolling(); // "scheduled" or "running"
   };
 
   return (
     <div className="flex items-center gap-3">
-      <RunStatusPill run={latest} />
+      {summary && (
+        <span className="text-xs text-slate-500">
+          Updated {new Date(summary.refreshed_at).toLocaleTimeString("de-DE")} — +{summary.added}{" "}
+          new, {summary.updated} updated, {summary.gone} gone
+          {summary.failed_sources.length > 0 && (
+            <span className="text-rose-600"> ({summary.failed_sources.join(", ")} failed)</span>
+          )}
+        </span>
+      )}
       <button
         onClick={onClick}
         disabled={busy}
         className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        {busy ? "Crawling…" : "Crawl now"}
+        {busy ? "Updating…" : "Update search"}
       </button>
-      {message && <span className="text-xs text-rose-600">{message}</span>}
+      {error && <span className="text-xs text-rose-600">{error}</span>}
     </div>
   );
 }

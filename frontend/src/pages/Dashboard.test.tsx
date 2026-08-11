@@ -1,28 +1,39 @@
-import { render, waitFor } from "@testing-library/react";
-import { expect, test, vi } from "vitest";
-
-const emptyPage = { items: [], total: 0, page: 1, page_size: 50 };
-const emptyFacets = { models: [], variants: [], battery_kwh: null };
-
-vi.mock("../api/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api/client")>();
-  return {
-    ...actual,
-    getListings: vi.fn(() => Promise.resolve(emptyPage)),
-    getFacets: vi.fn(() => Promise.resolve(emptyFacets)),
-    getSettings: vi.fn(() =>
-      Promise.resolve({ ai_enabled: false, ai_configured: false }),
-    ),
-    getRuns: vi.fn(() => Promise.resolve([])),
-  };
-});
-
+import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import { Dashboard } from "./Dashboard";
-import { getListings } from "../api/client";
+import * as client from "../api/client";
+import type { Listing } from "../types";
 
-test("queries listings scoped to electric with newest-first default sort", async () => {
-  render(<Dashboard />);
-  await waitFor(() => expect(getListings).toHaveBeenCalled());
-  const query = vi.mocked(getListings).mock.calls[0][0];
-  expect(query).toMatchObject({ fuel: "electric", sort: "scraped_at", order: "desc" });
+const listing: Listing = {
+  id: 1,
+  source: "vw",
+  source_id: "1",
+  url: "https://example.com/1",
+  model: "id4",
+  trim: "Pro",
+  price_eur: 30000,
+  mileage_km: 1000,
+  year: 2024,
+  power_kw: 150,
+  condition: "used",
+  location: "Berlin",
+  title: "VW ID.4 Pro",
+  status: "active",
+  first_seen_at: "2026-08-11T00:00:00Z",
+  last_seen_at: "2026-08-11T00:00:00Z",
+};
+
+describe("Dashboard", () => {
+  it("loads and displays listings from the API", async () => {
+    vi.spyOn(client, "getListings").mockResolvedValue([listing]);
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByText("1 found")).toBeInTheDocument());
+    expect(screen.getByText("Pro")).toBeInTheDocument();
+  });
+
+  it("shows an error message when listings fail to load", async () => {
+    vi.spyOn(client, "getListings").mockRejectedValue(new Error("boom"));
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
+  });
 });

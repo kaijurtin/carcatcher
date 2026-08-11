@@ -1,0 +1,101 @@
+"""Tests for crawl orchestration: upsert + gone-marking + partial-failure handling."""
+
+from __future__ import annotations
+
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
+
+from carcatcher.crawl import run_crawl
+from carcatcher.db.models import Listing, ListingStatus
+from carcatcher.scraping.base import RawListing
+
+
+def _engine():
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+    return engine
+
+
+class FakeParser:
+    def __init__(self, name, by_model):
+        self.name = name
+        self._by_model = by_model
+
+    def fetch_listings(self, model):
+        return self._by_model.get(model, [])
+
+
+class FailingParser:
+    name = "broken"
+
+    def fetch_listings(self, model):
+        raise RuntimeError("boom")
+
+
+def _raw(source, source_id, model="id4", price=30000):
+    return RawListing(
+        source=source, source_id=source_id, url=f"https://x/{source_id}",
+        model=model, trim="Pro", price_eur=price, mileage_km=1000, year=2024,
+        power_kw=150, condition="used", location="Berlin", title="VW ID.4 Pro",
+    )
+
+
+def test_first_crawl_inserts_new_listings():
+    engine = _engine()
+    parsers = {"vw": FakeParser("vw", {"id4": [_raw("vw", "1")], "id3": []})}
+    with Session(engine) as session:
+        summary = run_crawl(session, parsers)
+        assert summary.added == 1
+        assert summary.updated == 0
+        rows = session.exec(select(Listing)).all()
+        assert len(rows) == 1
+        assert rows[0].status == ListingStatus.ACTIVE.value
+
+
+def test_second_crawl_updates_existing_and_marks_missing_gone():
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1"), _raw("vw", "2")], "id3": []})},
+        )
+
+    with Session(engine) as session:
+        # listing "2" disappears, listing "1" reappears with a new price
+        summary = run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1", price=29000)], "id3": []})},
+        )
+        assert summary.updated == 1
+        assert summary.gone == 1
+        rows = {r.source_id: r for r in session.exec(select(Listing)).all()}
+        assert rows["1"].status == ListingStatus.ACTIVE.value
+        assert rows["1"].price_eur == 29000
+        assert rows["2"].status == ListingStatus.GONE.value
+
+
+def test_failed_source_does_not_mark_its_listings_gone():
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(session, {"vw": FakeParser("vw", {"id4": [_raw("vw", "1")], "id3": []})})
+
+    with Session(engine) as session:
+        summary = run_crawl(session, {"vw": FailingParser()})
+        assert summary.failed_sources == ["vw"]
+        assert summary.gone == 0
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.status == ListingStatus.ACTIVE.value
+
+
+def test_one_source_failing_does_not_stop_another_source_succeeding():
+    engine = _engine()
+    parsers = {
+        "vw": FailingParser(),
+        "autoscout24": FakeParser("autoscout24", {"id4": [_raw("autoscout24", "9")], "id3": []}),
+    }
+    with Session(engine) as session:
+        summary = run_crawl(session, parsers)
+        assert summary.added == 1
+        assert summary.failed_sources == ["vw"]

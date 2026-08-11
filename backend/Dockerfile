@@ -20,11 +20,7 @@ COPY carcatcher ./carcatcher
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Researched model guides (.md), served read-only by /api/models.
-COPY model_guides ./model_guides
-
-ENV PATH="/app/.venv/bin:$PATH" \
-    MODEL_GUIDES_DIR=/app/model_guides
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 CMD ["uvicorn", "carcatcher.main:app", "--host", "0.0.0.0", "--port", "8000"]

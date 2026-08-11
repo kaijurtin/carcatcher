@@ -1,49 +1,42 @@
-"""Refresh + runs endpoint tests."""
+"""Tests for POST /api/refresh."""
 
 from __future__ import annotations
 
-import carcatcher.api.routes.refresh as refresh_mod
-from sqlmodel import Session
-
-from carcatcher.db.engine import get_engine
-from carcatcher.db.models import CrawlRun, RunStatus
+from carcatcher.app_state import AppState, set_state
+from carcatcher.scraping.base import RawListing
 
 
-def test_refresh_requires_secret(client):
-    assert client.post("/api/refresh").status_code == 401
-    assert client.post(
-        "/api/refresh", headers={"X-Cron-Secret": "wrong"}
-    ).status_code == 401
+class _FakeParser:
+    def __init__(self, name, listings):
+        self.name = name
+        self._listings = listings
+
+    def fetch_listings(self, model):
+        return [l for l in self._listings if l.model == model]
 
 
-def test_refresh_409_when_running(client):
-    with Session(get_engine()) as s:
-        s.add(CrawlRun(source="kleinanzeigen", status=RunStatus.RUNNING.value))
-        s.commit()
-    resp = client.post("/api/refresh", headers={"X-Cron-Secret": "test-secret"})
-    assert resp.status_code == 409
+def _raw(source_id):
+    return RawListing(
+        source="vw", source_id=source_id, url=f"https://x/{source_id}", model="id4",
+        trim="Pro", price_eur=30000, mileage_km=1000, year=2024, power_kw=150,
+        condition="used", location="Berlin", title="VW ID.4 Pro",
+    )
 
 
-def test_refresh_202_schedules(client, monkeypatch):
-    called = {}
-
-    async def fake_run_all(**kwargs):
-        called.update(kwargs)
-
-    monkeypatch.setattr(refresh_mod, "run_all_enabled", fake_run_all)
-    resp = client.post("/api/refresh", headers={"X-Cron-Secret": "test-secret"})
-    assert resp.status_code == 202
-    assert resp.json()["status"] == "scheduled"
-
-
-def test_runs_lists_recent(client):
-    with Session(get_engine()) as s:
-        s.add(CrawlRun(source="kleinanzeigen", status=RunStatus.DONE.value,
-                       listings_new=5, est_cost_usd=0.01))
-        s.commit()
-    resp = client.get("/api/runs")
+def test_refresh_returns_summary(client, test_engine):
+    set_state(AppState(parsers={"vw": _FakeParser("vw", [_raw("1")])}))
+    resp = client.post("/api/refresh")
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body) == 1
-    assert body[0]["listings_new"] == 5
-    assert body[0]["status"] == "done"
+    assert body["added"] == 1
+    assert body["updated"] == 0
+    assert body["gone"] == 0
+    assert body["failed_sources"] == []
+    assert "refreshed_at" in body
+
+
+def test_refresh_then_listings_reflects_new_rows(client, test_engine):
+    set_state(AppState(parsers={"vw": _FakeParser("vw", [_raw("1")])}))
+    client.post("/api/refresh")
+    resp = client.get("/api/listings")
+    assert len(resp.json()) == 1

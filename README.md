@@ -1,23 +1,18 @@
 # CarCatcher
 
-A personal used-car finder for the German market. CarCatcher crawls listing sites
-in the background, normalizes messy listings into clean structured data with Claude,
-scores deals against a statistical fair-price baseline, supports structured and
-natural-language search, and produces a reasoned cross-candidate recommendation
-over a shortlist.
-
-> Personal, single-user tool. Value priority: **Aggregation > Comparison > Deal
-> scoring**. Data is a current snapshot only (no price history).
+A personal used-car finder for the German market. CarCatcher scrapes VW ID.3 and
+ID.4 listings from a couple of official sources, normalizes them into one unified
+table, and shows them on a single page — filterable by price, mileage, and trim,
+refreshed on demand via a button. No AI, no scheduler, no saved searches: just a
+current snapshot of what's on the market right now.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | FastAPI · Python 3.12+ · uv · pydantic-settings · SQLModel/SQLite · APScheduler |
-| AI | Anthropic Claude (Haiku normalize · Sonnet evaluate · Opus recommend) |
-| Scraping | Self-hosted Firecrawl behind a pluggable `Scraper` interface |
-| Frontend | React · TypeScript · Vite · Tailwind v4 · Recharts |
-| Deploy | Proxmox LXC → Docker Compose → nginx → Cloudflare Tunnel (`carcatcher.jurtin.de`) |
+| Backend | FastAPI · Python 3.12+ · uv · pydantic-settings · SQLModel/SQLite · httpx · BeautifulSoup |
+| Frontend | React · TypeScript · Vite · Tailwind v4 |
+| Deploy | Proxmox LXC → Docker Compose (`api` + `ui`) → shared nginx → Cloudflare Tunnel (`carcatcher.jurtin.de`) |
 
 ## Layout
 
@@ -25,10 +20,41 @@ over a shortlist.
 backend/    FastAPI app (carcatcher package) + pytest
 frontend/   React + Vite SPA, served by nginx in prod
 deploy/     Proxmox watchdog + sqlite backup scripts
-docker-compose.yml   api + ui + firecrawl
+docker-compose.yml   api + ui
 ```
 
+## Data sources
+
+- **AutoScout24** (`carcatcher/scraping/autoscout24.py`) — plain HTTP GET against
+  AutoScout24's search pages; results are parsed out of the embedded Next.js
+  `__NEXT_DATA__` JSON blob.
+- **VW.de** (`carcatcher/scraping/vwde.py`) — Volkswagen's own official
+  used/new-car search, called directly via the JSON API the site's own React app
+  uses.
+- **mobile.de** is deferred: live testing found it blocked by DataDome anti-bot
+  protection even via headless Chromium with stealth evasions. Not implemented.
+
+## API
+
+- `GET /api/listings?model=id3|id4&max_price=&max_km=&trim=&source=&status=` —
+  filtered listing rows (defaults to `status=active`).
+- `POST /api/refresh` — synchronously runs both scrapers across both models,
+  upserts into the `Listing` table, marks listings that disappeared as `gone`,
+  and returns `{added, updated, gone, failed_sources, refreshed_at}`.
+- `GET /api/health` — health check.
+
 ## Development
+
+Run locally with Docker Compose (matches production):
+
+```bash
+cp .env.example .env   # fill in DATA_DIR / UI_PORT if needed
+docker compose up --build
+# ui:  http://localhost:${UI_PORT:-8080}
+# api: proxied by the ui container at /api
+```
+
+Or run each side directly:
 
 ```bash
 # Backend
@@ -47,14 +73,18 @@ npm run build
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in values (see the file for the full list).
-Key vars: `ANTHROPIC_API_KEY`, `FIRECRAWL_BASE_URL`, `DATABASE_PATH`,
-`CRON_SCHEDULE`, `CRON_SECRET`, `AI_MONTHLY_BUDGET_USD`.
+Copy `.env.example` to `.env` and fill in values. Vars: `APP_NAME`,
+`DATABASE_PATH` (SQLite file path inside the api container), `DATA_DIR` (host
+directory bind-mounted to `/data`), `UI_PORT` (port the ui/nginx container
+exposes on the host).
 
 ## Deployment
 
-Runs as an unprivileged Debian LXC on Proxmox with Docker Compose inside, exposed
-via the shared nginx reverse proxy and Cloudflare Tunnel. See `deploy/proxmox/`.
+Runs as an unprivileged Debian LXC on Proxmox with Docker Compose inside,
+exposed via the shared nginx reverse proxy and Cloudflare Tunnel. See
+`deploy/proxmox/`. Tables are created on startup if missing
+(`SQLModel.metadata.create_all`); there is no schema migration tooling, so a
+breaking schema change needs the SQLite file deleted manually before restart.
 
 ```bash
 git pull && docker compose up --build -d

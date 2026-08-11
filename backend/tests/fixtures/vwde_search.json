@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "page": 1,
+    "pageItems": 12,
+    "pageMax": 30,
+    "priceMin": {
+      "symbol": "€",
+      "unit": "EUR",
+      "value": "30.690"
+    },
+    "resultNumber": 360,
+    "sort": "DATE_OFFER",
+    "sortDirection": "DESC"
+  },
+  "cars": [
+    {
+      "carid": "DEU4385118916-34",
+      "key": "REVVNDM4NTExODkxNi0zNA=",
+      "title": "Volkswagen ID.4 Pure",
+      "subtitle": {
+        "key": "subtitle",
+        "value": "ID.4 Pure 2,49% WÄRMEPU NAV 5J-GAR MATRIX APP 19"
+      },
+      "mileage": {
+        "key": "mileage",
+        "value": "10.937",
+        "raw_value": 10937
+      },
+      "initialreg": "2025-10-01T00:00:00Z",
+      "parsedPrice": {
+        "value": 34410
+      },
+      "powerLabel": " 125 kW (170 PS)",
+      "cartype": {
+        "code": "Y",
+        "value": "Junge Gebrauchtwagen"
+      },
+      "dealer": {
+        "city": {
+          "key": "city",
+          "value": "Kölln-Reisiek"
+        }
+      }
+    },
+    {
+      "carid": "DEU48691076678-56 W",
+      "key": "REVVNDg2OTEwNzY2NzgtNTYgVw=",
+      "title": "Volkswagen ID.4 Pro",
+      "subtitle": {
+        "key": "subtitle",
+        "value": "ID.4 Pro 210 kW IQ.LED AHK KAM WÄPU AR-HuD H/K"
+      },
+      "mileage": {
+        "key": "mileage",
+        "value": "20.874",
+        "raw_value": 20874
+      },
+      "initialreg": "2025-09-19T00:00:00Z",
+      "parsedPrice": {
+        "value": 41970
+      },
+      "powerLabel": " 210 kW (286 PS)",
+      "cartype": {
+        "code": "Y",
+        "value": "Junge Gebrauchtwagen"
+      },
+      "dealer": {
+        "city": {
+          "key": "city",
+          "value": "Neu-Ulm"
+        }
+      }
+    },
+    {
+      "carid": "DEU48691006400-56 W",
+      "key": "REVVNDg2OTEwMDY0MDAtNTYgVw=",
+      "title": "Volkswagen ID.4 Pro",
+      "subtitle": {
+        "key": "subtitle",
+        "value": "ID.4 Pro IQ.LED 360° WÄPU H/K TRAVEL AR-HuD 19\""
+      },
+      "mileage": {
+        "key": "mileage",
+        "value": "4.835",
+        "raw_value": 4835
+      },
+      "initialreg": "2025-10-21T00:00:00Z",
+      "parsedPrice": {
+        "value": 40970
+      },
+      "powerLabel": " 210 kW (286 PS)",
+      "cartype": {
+        "code": "Y",
+        "value": "Junge Gebrauchtwagen"
+      },
+      "dealer": {
+        "city": {
+          "key": "city",
+          "value": "Neu-Ulm"
+        }
+      }
+    },
+    {
+      "carid": "DEU12345000-01",
+      "key": "REVVMTIzNDUwMDAtMDE=",
+      "title": "Volkswagen ID.4 GTX",
+      "subtitle": {
+        "key": "subtitle",
+        "value": "ID.4 GTX 4Motion Neuwagen Werksauslieferung"
+      },
+      "mileage": {
+        "key": "mileage",
+        "value": "10",
+        "raw_value": 10
+      },
+      "initialreg": "2026-08-01T00:00:00Z",
+      "parsedPrice": {
+        "value": 52990
+      },
+      "powerLabel": " 220 kW (299 PS)",
+      "cartype": {
+        "code": "N",
+        "value": "Neuwagen"
+      },
+      "dealer": {
+        "city": {
+          "key": "city",
+          "value": "Wolfsburg"
+        }
+      }
+    }
+  ]
+}
