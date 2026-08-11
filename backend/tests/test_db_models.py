@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from carcatcher.db import engine as db_engine
 from carcatcher.db.models import Listing, ListingStatus
@@ -32,7 +32,7 @@ def test_creates_and_reads_a_listing():
         )
         session.commit()
         row = session.exec(
-            __import__("sqlmodel").select(Listing).where(Listing.source_id == "1")
+            select(Listing).where(Listing.source_id == "1")
         ).one()
         assert row.status == ListingStatus.ACTIVE.value
 
@@ -58,7 +58,7 @@ def test_status_can_be_set_to_gone_and_round_trips():
         )
         session.commit()
         row = session.exec(
-            __import__("sqlmodel").select(Listing).where(Listing.source_id == "1")
+            select(Listing).where(Listing.source_id == "1")
         ).one()
         assert row.status == ListingStatus.GONE.value
 
@@ -82,10 +82,10 @@ def test_tag_defaults_to_none_and_can_be_set_and_round_trips():
         )
         session.commit()
         untagged = session.exec(
-            __import__("sqlmodel").select(Listing).where(Listing.source_id == "1")
+            select(Listing).where(Listing.source_id == "1")
         ).one()
         tagged = session.exec(
-            __import__("sqlmodel").select(Listing).where(Listing.source_id == "2")
+            select(Listing).where(Listing.source_id == "2")
         ).one()
         assert untagged.tag is None
         assert tagged.tag == "star"
@@ -135,7 +135,7 @@ def test_init_db_adds_tag_column_to_an_existing_table_without_losing_data():
         db_engine.init_db()
         with Session(engine) as session:
             row = session.exec(
-                __import__("sqlmodel").select(Listing).where(Listing.source_id == "1")
+                select(Listing).where(Listing.source_id == "1")
             ).one()
             assert row.tag is None
             assert row.title == "A"  # pre-existing data untouched

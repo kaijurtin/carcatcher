@@ -25,9 +25,15 @@ export function Dashboard() {
   const items = data ?? [];
   const hasFilters = Object.values(filters).some((v) => v !== undefined && v !== "");
 
+  const [tagError, setTagError] = useState<string | null>(null);
   const onTagChange = async (id: number, tag: string | null) => {
-    await setListingTag(id, tag);
-    reload();
+    setTagError(null);
+    try {
+      await setListingTag(id, tag);
+      reload();
+    } catch (e) {
+      setTagError(e instanceof Error ? e.message : "Failed to set tag");
+    }
   };
 
   return (
@@ -54,6 +60,11 @@ export function Dashboard() {
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
+        </div>
+      )}
+      {tagError && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          {tagError}
         </div>
       )}
       {loading && !data && <div className="text-slate-400">Loading…</div>}

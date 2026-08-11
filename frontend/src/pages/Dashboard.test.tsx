@@ -49,4 +49,16 @@ describe("Dashboard", () => {
     await waitFor(() => expect(setListingTag).toHaveBeenCalledWith(1, "star"));
     await waitFor(() => expect(getListings).toHaveBeenCalledTimes(2));
   });
+
+  it("shows an error message when setting a tag fails, and does not reload", async () => {
+    const getListings = vi.spyOn(client, "getListings").mockResolvedValue([listing]);
+    vi.spyOn(client, "setListingTag").mockRejectedValue(new Error("tag update failed"));
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByText("1 found")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Tag for Pro"), { target: { value: "star" } });
+
+    await waitFor(() => expect(screen.getByText("tag update failed")).toBeInTheDocument());
+    expect(getListings).toHaveBeenCalledTimes(1); // no reload on failure
+  });
 });
