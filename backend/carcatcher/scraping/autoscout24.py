@@ -130,5 +130,7 @@ class AutoScout24Parser(Parser):
         return results
 
 
-# DEPRECATED: backwards compatibility alias for old registry
+# DEPRECATED: backwards compatibility alias for old registry. Interface-incompatible with
+# old Scraper ABC (has .fetch_listings(model), not .search()/.fetch_detail()/.parse_source_id());
+# exists only to prevent import errors in kleinanzeigen.py/mobilede.py until Task 3 deletes them.
 AutoScout24Scraper = AutoScout24Parser
