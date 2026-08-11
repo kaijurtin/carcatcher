@@ -1,65 +1,48 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
 import { RefreshControls } from "./RefreshControls";
+import * as client from "../api/client";
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  localStorage.removeItem("carcatcher_cron_secret");
-});
-
-function mockFetch(refreshStatus = 202) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-    const url = String(input);
-    if (url.includes("/api/runs")) {
-      return new Response(JSON.stringify([]), { status: 200 });
-    }
-    if (url.includes("/api/refresh")) {
-      expect((init?.headers as Record<string, string>)["X-Cron-Secret"]).toBe("s3cr3t");
-      return new Response(JSON.stringify({ status: "scheduled" }), {
-        status: refreshStatus,
-      });
-    }
-    return new Response("{}", { status: 404 });
+describe("RefreshControls", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
   });
-}
 
-test("renders the refresh button and empty run state", async () => {
-  mockFetch();
-  render(<RefreshControls />);
-  expect(screen.getByRole("button", { name: /Crawl now/ })).toBeInTheDocument();
-  await waitFor(() =>
-    expect(screen.getByText(/No crawls yet/)).toBeInTheDocument(),
-  );
-});
+  it("shows a loading state while refreshing, then the summary", async () => {
+    vi.spyOn(client, "refresh").mockResolvedValue({
+      added: 2,
+      updated: 1,
+      gone: 0,
+      failed_sources: [],
+      refreshed_at: "2026-08-11T12:00:00Z",
+    });
+    const onComplete = vi.fn();
+    render(<RefreshControls onComplete={onComplete} />);
 
-test("prompts for a secret when none stored, then triggers refresh", async () => {
-  const fetchSpy = mockFetch(202);
-  vi.spyOn(window, "prompt").mockReturnValue("s3cr3t");
+    fireEvent.click(screen.getByRole("button", { name: "Update search" }));
+    expect(screen.getByRole("button")).toHaveTextContent("Updating…");
 
-  render(<RefreshControls />);
-  fireEvent.click(screen.getByRole("button", { name: /Crawl now/ }));
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(screen.getByText(/2 new/)).toBeInTheDocument();
+  });
 
-  await waitFor(() =>
-    expect(localStorage.getItem("carcatcher_cron_secret")).toBe("s3cr3t"),
-  );
-  await waitFor(() =>
-    expect(
-      fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/refresh")),
-    ).toBe(true),
-  );
-});
+  it("shows an error message when refresh fails", async () => {
+    vi.spyOn(client, "refresh").mockRejectedValue(new Error("network down"));
+    render(<RefreshControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Update search" }));
+    await waitFor(() => expect(screen.getByText("network down")).toBeInTheDocument());
+  });
 
-test("does nothing when the secret prompt is cancelled", async () => {
-  const fetchSpy = mockFetch();
-  vi.spyOn(window, "prompt").mockReturnValue(null);
-
-  render(<RefreshControls />);
-  fireEvent.click(screen.getByRole("button", { name: /Crawl now/ }));
-
-  // No refresh call should be made.
-  await waitFor(() =>
-    expect(
-      fetchSpy.mock.calls.some(([u]) => String(u).includes("/api/refresh")),
-    ).toBe(false),
-  );
+  it("shows which sources failed when a refresh partially fails", async () => {
+    vi.spyOn(client, "refresh").mockResolvedValue({
+      added: 1,
+      updated: 0,
+      gone: 0,
+      failed_sources: ["vw"],
+      refreshed_at: "2026-08-11T12:00:00Z",
+    });
+    render(<RefreshControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Update search" }));
+    await waitFor(() => expect(screen.getByText(/vw/)).toBeInTheDocument());
+  });
 });
