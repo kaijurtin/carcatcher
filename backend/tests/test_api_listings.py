@@ -7,7 +7,7 @@ from sqlmodel import Session
 from carcatcher.db.models import Listing
 
 
-def _seed(engine, **overrides):
+def _seed(engine, **overrides) -> int:
     defaults = dict(
         source="vw", source_id="1", url="https://x/1", model="id4", trim="Pro",
         price_eur=30000, mileage_km=10000, year=2024, power_kw=150,
@@ -15,8 +15,11 @@ def _seed(engine, **overrides):
     )
     defaults.update(overrides)
     with Session(engine) as session:
-        session.add(Listing(**defaults))
+        listing = Listing(**defaults)
+        session.add(listing)
         session.commit()
+        session.refresh(listing)
+        return listing.id
 
 
 def test_returns_active_listings(client, test_engine):
@@ -75,3 +78,45 @@ def test_sorted_by_price_ascending_with_nulls_last(client, test_engine):
     _seed(test_engine, source_id="3", price_eur=None)
     resp = client.get("/api/listings")
     assert [i["source_id"] for i in resp.json()] == ["2", "1", "3"]
+
+
+def test_listing_tag_defaults_to_null(client, test_engine):
+    _seed(test_engine, source_id="1")
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["tag"] is None
+
+
+def test_patch_tag_sets_and_returns_the_updated_listing(client, test_engine):
+    listing_id = _seed(test_engine, source_id="1")
+    resp = client.patch(f"/api/listings/{listing_id}/tag", json={"tag": "star"})
+    assert resp.status_code == 200
+    assert resp.json()["tag"] == "star"
+
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["tag"] == "star"
+
+
+def test_patch_tag_null_clears_it(client, test_engine):
+    listing_id = _seed(test_engine, source_id="1", tag="7")
+    resp = client.patch(f"/api/listings/{listing_id}/tag", json={"tag": None})
+    assert resp.status_code == 200
+    assert resp.json()["tag"] is None
+
+
+def test_patch_tag_rejects_an_invalid_value(client, test_engine):
+    listing_id = _seed(test_engine, source_id="1")
+    resp = client.patch(f"/api/listings/{listing_id}/tag", json={"tag": "banana"})
+    assert resp.status_code == 422
+
+
+def test_patch_tag_404_for_a_missing_listing(client, test_engine):
+    resp = client.patch("/api/listings/999/tag", json={"tag": "star"})
+    assert resp.status_code == 404
+
+
+def test_patch_tag_accepts_every_allowed_value(client, test_engine):
+    listing_id = _seed(test_engine, source_id="1")
+    for value in ["star", "plus", "minus", *[str(n) for n in range(1, 11)]]:
+        resp = client.patch(f"/api/listings/{listing_id}/tag", json={"tag": value})
+        assert resp.status_code == 200, value
+        assert resp.json()["tag"] == value

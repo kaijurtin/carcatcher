@@ -40,10 +40,34 @@ def set_engine(engine: Engine) -> None:
     _engine = engine
 
 
+# Columns added to `listing` after its first deployment. `create_all()` only
+# creates missing *tables*, never missing *columns* on a table that already
+# exists — so a column added to the model here must be explicitly backfilled
+# onto an already-deployed SQLite file, or production reads/writes break.
+_ADDED_COLUMNS: dict[str, str] = {
+    "tag": "TEXT",
+}
+
+
+def _ensure_added_columns(engine: Engine) -> None:
+    """Idempotently add any `listing` columns from `_ADDED_COLUMNS` missing
+    from an already-existing table. No-op if the table doesn't exist yet
+    (create_all() above just created it with every current column)."""
+    with engine.connect() as conn:
+        existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(listing)")}
+        if not existing:
+            return
+        for name, sqltype in _ADDED_COLUMNS.items():
+            if name not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE listing ADD COLUMN {name} {sqltype}")
+        conn.commit()
+
+
 def init_db() -> None:
-    """Create all tables if they do not yet exist."""
+    """Create all tables if they do not yet exist, then backfill any added columns."""
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+    _ensure_added_columns(engine)
 
 
 def get_session() -> Iterator[Session]:

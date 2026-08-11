@@ -42,6 +42,7 @@ class Listing(SQLModel, table=True):
     condition: str = "used"  # "new" | "used"
     location: str | None = None
     title: str = ""
+    tag: str | None = None  # "star" | "plus" | "minus" | "1".."10"
 
     status: str = Field(default=ListingStatus.ACTIVE.value, index=True)
     first_seen_at: datetime = Field(default_factory=utcnow)
