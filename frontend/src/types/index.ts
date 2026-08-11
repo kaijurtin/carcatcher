@@ -12,6 +12,7 @@ export interface Listing {
   condition: string;
   location: string | null;
   title: string;
+  tag: string | null;
   status: string;
   first_seen_at: string;
   last_seen_at: string;

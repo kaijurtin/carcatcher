@@ -3,6 +3,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { useListings } from "../hooks/useListings";
 import { ListingsTable, type TableFilters } from "../components/ListingsTable";
 import { RefreshControls } from "../components/RefreshControls";
+import { setListingTag } from "../api/client";
 import type { ListingQuery } from "../types";
 
 function toQuery(f: TableFilters): ListingQuery {
@@ -23,6 +24,11 @@ export function Dashboard() {
 
   const items = data ?? [];
   const hasFilters = Object.values(filters).some((v) => v !== undefined && v !== "");
+
+  const onTagChange = async (id: number, tag: string | null) => {
+    await setListingTag(id, tag);
+    reload();
+  };
 
   return (
     <section>
@@ -52,7 +58,7 @@ export function Dashboard() {
       )}
       {loading && !data && <div className="text-slate-400">Loading…</div>}
 
-      <ListingsTable items={items} filters={filters} onFilterChange={setFilters} />
+      <ListingsTable items={items} filters={filters} onFilterChange={setFilters} onTagChange={onTagChange} />
     </section>
   );
 }

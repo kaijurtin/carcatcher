@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Dashboard } from "./Dashboard";
 import * as client from "../api/client";
 import type { Listing } from "../types";
@@ -18,6 +18,7 @@ const listing: Listing = {
   condition: "used",
   location: "Berlin",
   title: "VW ID.4 Pro",
+  tag: null,
   status: "active",
   first_seen_at: "2026-08-11T00:00:00Z",
   last_seen_at: "2026-08-11T00:00:00Z",
@@ -35,5 +36,17 @@ describe("Dashboard", () => {
     vi.spyOn(client, "getListings").mockRejectedValue(new Error("boom"));
     render(<Dashboard />);
     await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
+  });
+
+  it("sets a tag via the API and reloads listings when a tag is picked", async () => {
+    const getListings = vi.spyOn(client, "getListings").mockResolvedValue([listing]);
+    const setListingTag = vi.spyOn(client, "setListingTag").mockResolvedValue({ ...listing, tag: "star" });
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByText("1 found")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Tag for Pro"), { target: { value: "star" } });
+
+    await waitFor(() => expect(setListingTag).toHaveBeenCalledWith(1, "star"));
+    await waitFor(() => expect(getListings).toHaveBeenCalledTimes(2));
   });
 });

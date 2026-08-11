@@ -21,6 +21,14 @@ const MODEL_OPTIONS: { value: string; label: string }[] = [
 
 const MODEL_LABEL: Record<string, string> = { id3: "ID.3", id4: "ID.4" };
 
+const TAG_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "—" },
+  { value: "star", label: "★" },
+  { value: "plus", label: "+" },
+  { value: "minus", label: "−" },
+  ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+];
+
 export interface TableFilters {
   model?: string;
   source?: string;
@@ -80,9 +88,10 @@ interface ListingsTableProps {
   items: Listing[];
   filters: TableFilters;
   onFilterChange: (next: TableFilters) => void;
+  onTagChange: (id: number, tag: string | null) => void;
 }
 
-export function ListingsTable({ items, filters, onFilterChange }: ListingsTableProps) {
+export function ListingsTable({ items, filters, onFilterChange, onTagChange }: ListingsTableProps) {
   const f = filters;
   const set = (patch: Partial<TableFilters>) => onFilterChange({ ...f, ...patch });
 
@@ -108,6 +117,7 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
             <SortableHeader label="Condition" field="condition" sort={sort} onSort={onSort} />
             <SortableHeader label="Location" field="location" sort={sort} onSort={onSort} />
             <SortableHeader label="Source" field="source" sort={sort} onSort={onSort} />
+            <th className="px-4 py-3 font-medium">Tag</th>
             <th className="px-4 py-3 font-medium" />
           </tr>
           <tr className="border-t border-slate-200 bg-white text-slate-600 normal-case tracking-normal">
@@ -176,12 +186,13 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
               </select>
             </th>
             <th className="px-4 py-2" />
+            <th className="px-4 py-2" />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {items.length === 0 ? (
             <tr>
-              <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
+              <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
                 No listings match these filters.
               </td>
             </tr>
@@ -210,6 +221,20 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                   {SOURCE_LABEL[l.source] ?? l.source}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
+                  <select
+                    aria-label={`Tag for ${l.trim || l.title}`}
+                    value={l.tag ?? ""}
+                    onChange={(e) => onTagChange(l.id, e.target.value || null)}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
+                  >
+                    {TAG_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <a

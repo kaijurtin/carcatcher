@@ -17,34 +17,37 @@ const listing: Listing = {
   condition: "used",
   location: "Berlin",
   title: "VW ID.4 Pro",
+  tag: null,
   status: "active",
   first_seen_at: "2026-08-11T00:00:00Z",
   last_seen_at: "2026-08-11T00:00:00Z",
 };
 
+const noop = () => {};
+
 describe("ListingsTable", () => {
   it("renders a row per listing", () => {
-    render(<ListingsTable items={[listing]} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={[listing]} filters={{}} onFilterChange={noop} onTagChange={noop} />);
     expect(screen.getByText("Pro Performance")).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: /ID\.4/ })).toBeInTheDocument();
     expect(screen.getByText("34.410 €")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no listings", () => {
-    render(<ListingsTable items={[]} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={[]} filters={{}} onFilterChange={noop} onTagChange={noop} />);
     expect(screen.getByText("No listings match these filters.")).toBeInTheDocument();
   });
 
   it("calls onFilterChange when the trim filter changes", () => {
     const onFilterChange = vi.fn();
-    render(<ListingsTable items={[]} filters={{}} onFilterChange={onFilterChange} />);
+    render(<ListingsTable items={[]} filters={{}} onFilterChange={onFilterChange} onTagChange={noop} />);
     fireEvent.change(screen.getByLabelText("Filter trim"), { target: { value: "Pro" } });
     expect(onFilterChange).toHaveBeenCalledWith({ trim: "Pro" });
   });
 
   it("calls onFilterChange when the max price filter changes", () => {
     const onFilterChange = vi.fn();
-    render(<ListingsTable items={[]} filters={{}} onFilterChange={onFilterChange} />);
+    render(<ListingsTable items={[]} filters={{}} onFilterChange={onFilterChange} onTagChange={noop} />);
     fireEvent.change(screen.getByLabelText("Max price"), { target: { value: "30000" } });
     expect(onFilterChange).toHaveBeenCalledWith({ max_price: 30000 });
   });
@@ -60,7 +63,7 @@ describe("ListingsTable", () => {
   }
 
   it("sorts ascending on first header click, descending on second click", () => {
-    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
     const ascOrder = rowTrims();
@@ -76,7 +79,7 @@ describe("ListingsTable", () => {
   });
 
   it("switches sort field and resets to ascending when a different header is clicked", () => {
-    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
     fireEvent.click(screen.getByRole("button", { name: "Sort by Price" })); // now descending by price
@@ -89,7 +92,7 @@ describe("ListingsTable", () => {
   });
 
   it("sorts null values last regardless of direction", () => {
-    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Sort by Location" }));
     let order = rowTrims();
@@ -109,7 +112,7 @@ describe("ListingsTable", () => {
       { ...listing, id: 1, trim: "Charlie", condition: "new" }, // displayed "Neu"
       { ...listing, id: 2, trim: "Alpha", condition: "used" }, // displayed "Gebraucht"
     ];
-    render(<ListingsTable items={conditionListings} filters={{}} onFilterChange={() => {}} />);
+    render(<ListingsTable items={conditionListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Sort by Condition" }));
     const order = screen.getAllByRole("row").slice(2).map((row) => row.textContent);
@@ -117,5 +120,38 @@ describe("ListingsTable", () => {
     // even though the raw value "used" > "new".
     expect(order[0]).toContain("Alpha"); // Gebraucht
     expect(order[1]).toContain("Charlie"); // Neu
+  });
+
+  it("shows a tag selector defaulting to no tag", () => {
+    render(<ListingsTable items={[listing]} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+    expect(screen.getByLabelText("Tag for Pro Performance")).toHaveValue("");
+  });
+
+  it("shows the listing's existing tag in the selector", () => {
+    render(
+      <ListingsTable items={[{ ...listing, tag: "star" }]} filters={{}} onFilterChange={noop} onTagChange={noop} />,
+    );
+    expect(screen.getByLabelText("Tag for Pro Performance")).toHaveValue("star");
+  });
+
+  it("calls onTagChange with the listing id and new tag when a tag is picked", () => {
+    const onTagChange = vi.fn();
+    render(<ListingsTable items={[listing]} filters={{}} onFilterChange={noop} onTagChange={onTagChange} />);
+    fireEvent.change(screen.getByLabelText("Tag for Pro Performance"), { target: { value: "7" } });
+    expect(onTagChange).toHaveBeenCalledWith(1, "7");
+  });
+
+  it("calls onTagChange with null when the tag is cleared", () => {
+    const onTagChange = vi.fn();
+    render(
+      <ListingsTable
+        items={[{ ...listing, tag: "star" }]}
+        filters={{}}
+        onFilterChange={noop}
+        onTagChange={onTagChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Tag for Pro Performance"), { target: { value: "" } });
+    expect(onTagChange).toHaveBeenCalledWith(1, null);
   });
 });

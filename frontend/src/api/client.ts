@@ -48,3 +48,15 @@ export async function refresh(): Promise<RefreshSummary> {
   }
   return (await resp.json()) as RefreshSummary;
 }
+
+export async function setListingTag(id: number, tag: string | null): Promise<Listing> {
+  const resp = await fetch(`${BASE}/listings/${id}/tag`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag }),
+  });
+  if (!resp.ok) {
+    throw new ApiError(resp.status, `set tag failed: ${resp.status}`);
+  }
+  return (await resp.json()) as Listing;
+}
