@@ -44,3 +44,24 @@ def test_enforces_source_source_id_uniqueness():
         session.add(Listing(source="vw", source_id="1", url="https://x/1-dup", model="id4", title="B"))
         with pytest.raises(IntegrityError):
             session.commit()
+
+
+def test_status_can_be_set_to_gone_and_round_trips():
+    engine = _engine()
+    with Session(engine) as session:
+        session.add(
+            Listing(
+                source="vw", source_id="1", url="https://x/1", model="id4", title="A",
+                status=ListingStatus.GONE.value,
+            )
+        )
+        session.commit()
+        row = session.exec(
+            __import__("sqlmodel").select(Listing).where(Listing.source_id == "1")
+        ).one()
+        assert row.status == ListingStatus.GONE.value
+
+
+def test_removed_legacy_fields_are_not_on_the_model():
+    for field in ("battery_kwh", "make", "deal_score", "ai_evaluation", "fair_price_estimate"):
+        assert field not in Listing.model_fields
