@@ -576,8 +576,10 @@ git commit -m "feat: add VW.de parser hitting the site's own JSON search API dir
 - Delete: `backend/carcatcher/scraping/firecrawl_client.py`
 - Delete: `backend/tests/test_kleinanzeigen.py`
 - Delete: `backend/tests/test_firecrawl_client.py`
+- Delete: `backend/tests/test_mobilede.py` (added by Amendment 3 below — a gap in the original plan)
 - Delete: `backend/tests/fixtures/kleinanzeigen_search.html`
 - Delete: `backend/tests/fixtures/mobilede_search.html`
+- Modify: `backend/tests/conftest.py` — make the `client` fixture's `create_app` import lazy (see Amendment 3)
 - Test: `backend/tests/test_registry.py` (new, small)
 
 **Interfaces:**
@@ -585,6 +587,12 @@ git commit -m "feat: add VW.de parser hitting the site's own JSON search API dir
 - Produces: `build_registry() -> dict[str, Parser]` — used by Task 6's `app_state.py`.
 
 **Amendment 1 (added after Task 1's review):** Task 1 discovered that `base.py` cannot be fully stripped to just `Model`/`RawListing`/`Parser` without breaking `conftest.py`'s module-level import of `carcatcher.main.create_app` — which transitively imports `kleinanzeigen.py`/`mobilede.py`, and those do `from carcatcher.scraping.base import ListingStub, RawPage, Scraper`. Task 1 therefore left a clearly-banner-commented `# DEPRECATED` shim (`ListingStub`, `RawPage`, `Scraper`, `sha256_text` in `base.py`; an `AutoScout24Scraper = AutoScout24Parser` alias in `autoscout24.py`) as a necessary transitional measure.
+
+**Amendment 3 (added after Task 3's implementer hit a second, broader blocker):** Even with Amendment 2's correction (shim stays until Task 7), this task still couldn't pass its own acceptance test. Root cause, confirmed by direct investigation: `carcatcher/app_state.py` (not rewritten until Task 6) does `from carcatcher.scraping.firecrawl_client import FirecrawlClient` **at module level** — and this task deletes `firecrawl_client.py`. Since `conftest.py` does `from carcatcher.main import create_app` at module level too, and `main.py` → `app_state.py` → `firecrawl_client` is a straight import chain, deleting `firecrawl_client.py` breaks `conftest.py`'s own import, which aborts test collection for the *entire* `tests/` directory — not just this task's tests. This is a structural issue that will recur: Task 4 has the same shape (old `routes/listings.py`, not rewritten until Task 6, imports model names Task 4 deletes from `db/models.py`).
+
+**The general fix, applied now rather than patched per-task:** `conftest.py`'s `client` fixture currently does `from carcatcher.main import create_app` at module level (line 13). Move that import to be local to the `client()` fixture function body instead. This decouples "can pytest collect and run tests that don't need the full app" from "does the full app currently import cleanly" — tests that request the `client`/`test_engine` fixtures still need a working app (none do until Task 6 anyway), but standalone unit tests like `test_registry.py`/`test_autoscout24.py`/`test_vwde.py` no longer get collateral-damaged by an unrelated, not-yet-migrated module. Task 7's Step 3 (full `conftest.py` rewrite) is unaffected — by Task 7, `main.py`/`app_state.py` are already fully migrated (Task 6 done), so the import being eager or lazy no longer matters there; keep Task 7's conftest.py as already written in this plan.
+
+Also found in the same investigation: `backend/tests/test_mobilede.py` exists and was never scheduled for deletion anywhere in this plan — a gap from the original design. It tests the old `mobilede.py` (deleted by this task), so it must be deleted here too, alongside `test_kleinanzeigen.py`.
 
 **Amendment 2 (added after Task 3's implementer hit a blocker — supersedes Amendment 1's removal plan):** Amendment 1 assumed this task (Task 3) could delete the shim once `kleinanzeigen.py`/`mobilede.py` are gone. That's wrong: a grep across the whole backend (`grep -rln --include='*.py' -E '\b(ListingStub|RawPage|Scraper|sha256_text|AutoScout24Scraper)\b' carcatcher tests`) found **two more consumers** neither Task 1 nor the original Task 3 plan accounted for: `carcatcher/app_state.py` (imports `Scraper` for a type annotation — fixed when Task 6 rewrites this file) and `carcatcher/pipeline/run.py` + `backend/tests/test_multisource.py` (both use `ListingStub`/`Scraper`/`sha256_text`/`AutoScout24Scraper` throughout — both deleted whole in **Task 7**, not this task). **This task does NOT remove the shim.** It stays in place, banner-commented as deprecated, until Task 7 — see Task 7's amendment below for the actual removal step. This task only does the registry rewrite and the `kleinanzeigen.py`/`mobilede.py`/`firecrawl_client.py` deletions below.
 
@@ -638,21 +646,36 @@ git rm backend/carcatcher/scraping/kleinanzeigen.py \
        backend/carcatcher/scraping/firecrawl_client.py \
        backend/tests/test_kleinanzeigen.py \
        backend/tests/test_firecrawl_client.py \
+       backend/tests/test_mobilede.py \
        backend/tests/fixtures/kleinanzeigen_search.html \
        backend/tests/fixtures/mobilede_search.html
+```
+
+- [ ] **Step 4b: Make `conftest.py`'s `client` fixture import `create_app` lazily**
+
+This is the fix described in Amendment 3 above. In `backend/tests/conftest.py`, remove the module-level line `from carcatcher.main import create_app`, and add `from carcatcher.main import create_app` as the first line inside the `client()` fixture function body instead. Nothing else in the file changes. Resulting fixture:
+
+```python
+@pytest.fixture()
+def client(test_engine):
+    from carcatcher.main import create_app
+
+    app = create_app()
+    with TestClient(app) as c:
+        yield c
 ```
 
 - [ ] **Step 5: Run to verify the registry test passes** (do NOT run the full suite — `pipeline/run.py` and its tests are still on the old `Scraper` interface until Task 7, so a full-suite run will show pre-existing unrelated failures; that's expected)
 
 Run: `cd backend && .venv/bin/pytest tests/test_registry.py tests/test_autoscout24.py tests/test_vwde.py -v`
-Expected: all PASS.
+Expected: all PASS — and collection no longer aborts even though `carcatcher.main`'s import chain is still broken (`app_state.py` still imports the now-deleted `firecrawl_client`), because nothing in these three test files requests the `client`/`test_engine` fixtures that would trigger that import.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 cd /root/repos/carcatcher
-git add backend/carcatcher/scraping/registry.py backend/tests/test_registry.py
-git commit -m "feat: rewrite scraper registry for 2-source v1; delete Kleinanzeigen/mobile.de/Firecrawl"
+git add backend/carcatcher/scraping/registry.py backend/tests/test_registry.py backend/tests/conftest.py
+git commit -m "feat: rewrite scraper registry for 2-source v1; delete Kleinanzeigen/mobile.de/Firecrawl; make conftest's app import lazy"
 ```
 
 ---
