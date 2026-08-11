@@ -578,11 +578,15 @@ git commit -m "feat: add VW.de parser hitting the site's own JSON search API dir
 - Delete: `backend/tests/test_firecrawl_client.py`
 - Delete: `backend/tests/fixtures/kleinanzeigen_search.html`
 - Delete: `backend/tests/fixtures/mobilede_search.html`
+- Modify: `backend/carcatcher/scraping/base.py` — remove the deprecated backwards-compat shim (see Step 4a)
+- Modify: `backend/carcatcher/scraping/autoscout24.py` — remove the deprecated `AutoScout24Scraper` alias (see Step 4a)
 - Test: `backend/tests/test_registry.py` (new, small)
 
 **Interfaces:**
 - Consumes: `AutoScout24Parser` (Task 1), `VwDeParser` (Task 2), `Parser` (Task 1).
 - Produces: `build_registry() -> dict[str, Parser]` — used by Task 6's `app_state.py`.
+
+**Amendment (added after Task 1's review):** Task 1 discovered that `base.py` cannot be fully stripped to just `Model`/`RawListing`/`Parser` without breaking `conftest.py`'s module-level import of `carcatcher.main.create_app` — which, until this task runs, still transitively imports `kleinanzeigen.py`/`mobilede.py`, and those still do `from carcatcher.scraping.base import ListingStub, RawPage, Scraper`. Task 1 therefore left a clearly-banner-commented `# DEPRECATED` shim (`ListingStub`, `RawPage`, `Scraper`, `sha256_text` in `base.py`; an `AutoScout24Scraper = AutoScout24Parser` alias in `autoscout24.py`) as a necessary transitional measure. **This task is where that shim's last consumers (`kleinanzeigen.py`, `mobilede.py`) are deleted — so this task is also responsible for deleting the shim itself.** Step 4a below does that.
 
 - [ ] **Step 1: Write the failing test `backend/tests/test_registry.py`**
 
@@ -638,17 +642,25 @@ git rm backend/carcatcher/scraping/kleinanzeigen.py \
        backend/tests/fixtures/mobilede_search.html
 ```
 
-- [ ] **Step 5: Run to verify the registry test passes**
+- [ ] **Step 4a: Remove the now-unused deprecated shim from `base.py` and `autoscout24.py`**
 
-Run: `cd backend && .venv/bin/pytest tests/test_registry.py -v`
-Expected: PASS.
+With `kleinanzeigen.py`/`mobilede.py` deleted, nothing imports `ListingStub`, `RawPage`, `Scraper`, `sha256_text`, or `AutoScout24Scraper` anymore. Delete all of it. `backend/carcatcher/scraping/base.py` should end up containing exactly the `Model`/`RawListing`/`Parser` block from Task 1's Step 1 (the `# BACKWARDS COMPATIBILITY` banner and everything under it removed). In `backend/carcatcher/scraping/autoscout24.py`, delete the `AutoScout24Scraper = AutoScout24Parser` alias line (and its comment) at the bottom of the file.
+
+Run: `cd backend && grep -rn "ListingStub\|RawPage\|Scraper\b\|sha256_text\|AutoScout24Scraper" carcatcher tests`
+Expected: no matches (confirms nothing else still references the removed names before you commit).
+
+- [ ] **Step 5: Run to verify the registry test — and the full suite so far — passes**
+
+Run: `cd backend && .venv/bin/pytest tests/test_registry.py tests/test_autoscout24.py tests/test_vwde.py -v`
+Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 cd /root/repos/carcatcher
-git add backend/carcatcher/scraping/registry.py backend/tests/test_registry.py
-git commit -m "feat: rewrite scraper registry for 2-source v1; delete Kleinanzeigen/mobile.de/Firecrawl"
+git add backend/carcatcher/scraping/registry.py backend/carcatcher/scraping/base.py \
+        backend/carcatcher/scraping/autoscout24.py backend/tests/test_registry.py
+git commit -m "feat: rewrite scraper registry for 2-source v1; delete Kleinanzeigen/mobile.de/Firecrawl and the Task 1 transitional shim"
 ```
 
 ---
