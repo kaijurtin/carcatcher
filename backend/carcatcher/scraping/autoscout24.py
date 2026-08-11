@@ -27,6 +27,12 @@ _DIGITS_RE = re.compile(r"\d[\d.]*")
 _UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
 _POWER_RE = re.compile(r"(\d+)\s*kW")
 _YEAR_RE = re.compile(r"(\d{4})")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]")
+
+
+def _normalize_model_code(text: str | None) -> str:
+    """Lowercase and strip non-alphanumerics, e.g. "ID.4" -> "id4"."""
+    return _NON_ALNUM_RE.sub("", (text or "").lower())
 
 
 def _to_int(text: str | None) -> int | None:
@@ -67,6 +73,13 @@ def _item_to_listing(item: dict, model: Model) -> RawListing | None:
     if not item.get("id"):
         return None
     vehicle = item.get("vehicle") or {}
+    # AS24 can return off-model vehicles in unfiltered contexts (boosted/sponsored
+    # slots) even when the search URL targets a specific model — guard against
+    # storing them mislabeled as the requested VW ID.3/ID.4.
+    if (vehicle.get("make") or "").strip().lower() != "volkswagen":
+        return None
+    if _normalize_model_code(vehicle.get("model")) != model:
+        return None
     url = item.get("url") or ""
     url = url if url.startswith("http") else f"{BASE_URL}{url}"
     details = _details(item.get("vehicleDetails") or [])
