@@ -45,4 +45,24 @@ describe("RefreshControls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update search" }));
     await waitFor(() => expect(screen.getByText(/vw/)).toBeInTheDocument());
   });
+
+  it("clears a stale success summary when a subsequent refresh fails", async () => {
+    const refreshSpy = vi.spyOn(client, "refresh");
+    refreshSpy.mockResolvedValueOnce({
+      added: 3,
+      updated: 0,
+      gone: 0,
+      failed_sources: [],
+      refreshed_at: "2026-08-11T12:00:00Z",
+    });
+    render(<RefreshControls />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Update search" }));
+    await waitFor(() => expect(screen.getByText(/3 new/)).toBeInTheDocument());
+
+    refreshSpy.mockRejectedValueOnce(new Error("network down"));
+    fireEvent.click(screen.getByRole("button", { name: "Update search" }));
+    await waitFor(() => expect(screen.getByText("network down")).toBeInTheDocument());
+    expect(screen.queryByText(/3 new/)).not.toBeInTheDocument();
+  });
 });

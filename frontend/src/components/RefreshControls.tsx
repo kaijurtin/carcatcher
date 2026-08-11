@@ -10,6 +10,7 @@ export function RefreshControls({ onComplete }: { onComplete?: () => void }) {
   const onClick = async () => {
     setBusy(true);
     setError(null);
+    setSummary(null);
     try {
       const result = await refresh();
       setSummary(result);
