@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { getListings } from "../api/client";
-import type { ListingQuery, ListingsPage } from "../types";
+import type { Listing, ListingQuery } from "../types";
 
 interface State {
-  data: ListingsPage | null;
+  data: Listing[] | null;
   loading: boolean;
   error: string | null;
 }
@@ -15,7 +15,6 @@ export function useListings(query: ListingQuery) {
     error: null,
   });
 
-  // Serialize the query so the effect re-runs only on real changes.
   const key = JSON.stringify(query);
 
   const reload = useCallback(() => {
