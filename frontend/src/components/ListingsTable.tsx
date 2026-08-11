@@ -49,6 +49,17 @@ interface SortState {
 
 const TEXT_SORT_FIELDS = new Set<SortField>(["model", "trim", "condition", "location", "source"]);
 
+const CONDITION_LABEL: Record<string, string> = { new: "Neu", used: "Gebraucht" };
+
+// Condition sorts by its displayed label, not the raw "new"/"used" value, so
+// ascending/descending order matches what the user actually sees in the cell.
+function sortValue(item: Listing, field: SortField): unknown {
+  if (field === "condition") {
+    return CONDITION_LABEL[item.condition] ?? item.condition;
+  }
+  return item[field];
+}
+
 function compareValues(av: unknown, bv: unknown, isText: boolean, direction: "asc" | "desc"): number {
   if (av == null && bv == null) return 0;
   if (av == null) return 1; // nulls always sort last, regardless of direction
@@ -62,7 +73,7 @@ function compareValues(av: unknown, bv: unknown, isText: boolean, direction: "as
 function sortListings(items: Listing[], sort: SortState | null): Listing[] {
   if (!sort) return items;
   const isText = TEXT_SORT_FIELDS.has(sort.field);
-  return [...items].sort((a, b) => compareValues(a[sort.field], b[sort.field], isText, sort.direction));
+  return [...items].sort((a, b) => compareValues(sortValue(a, sort.field), sortValue(b, sort.field), isText, sort.direction));
 }
 
 interface ListingsTableProps {
@@ -192,7 +203,7 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
                   {l.power_kw != null ? `${l.power_kw} kW` : "—"}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                  {l.condition === "new" ? "Neu" : "Gebraucht"}
+                  {CONDITION_LABEL[l.condition] ?? l.condition}
                 </td>
                 <td className="max-w-[12rem] px-4 py-3 text-slate-600">
                   <span className="line-clamp-1">{l.location ?? "—"}</span>
@@ -219,17 +230,14 @@ export function ListingsTable({ items, filters, onFilterChange }: ListingsTableP
   );
 }
 
-function SortableHeader({
-  label,
-  field,
-  sort,
-  onSort,
-}: {
+interface SortableHeaderProps {
   label: string;
   field: SortField;
   sort: SortState | null;
   onSort: (field: SortField) => void;
-}) {
+}
+
+function SortableHeader({ label, field, sort, onSort }: SortableHeaderProps) {
   const active = sort?.field === field;
   const arrow = active ? (sort?.direction === "asc" ? " ▲" : " ▼") : "";
   return (

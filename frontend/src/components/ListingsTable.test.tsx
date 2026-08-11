@@ -103,4 +103,19 @@ describe("ListingsTable", () => {
     expect(order[1]).toContain("Bravo"); // Aachen
     expect(order[2]).toContain("Alpha"); // null location, still last
   });
+
+  it("sorts Condition by its displayed label (Gebraucht/Neu), not the raw new/used value", () => {
+    const conditionListings: Listing[] = [
+      { ...listing, id: 1, trim: "Charlie", condition: "new" }, // displayed "Neu"
+      { ...listing, id: 2, trim: "Alpha", condition: "used" }, // displayed "Gebraucht"
+    ];
+    render(<ListingsTable items={conditionListings} filters={{}} onFilterChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Condition" }));
+    const order = screen.getAllByRole("row").slice(2).map((row) => row.textContent);
+    // "Gebraucht" < "Neu" alphabetically, so ascending must show it first,
+    // even though the raw value "used" > "new".
+    expect(order[0]).toContain("Alpha"); // Gebraucht
+    expect(order[1]).toContain("Charlie"); // Neu
+  });
 });
