@@ -5,7 +5,36 @@ inside, exposed via the shared **nginx (LXC 111)** + **Cloudflare Tunnel** at
 `carcatcher.jurtin.de`. SQLite lives on an NFS bind-mount; a host-side systemd
 watchdog reboots the container if `/api/health` fails.
 
-## 1. Create the LXC
+## Redeploy (the common case — the LXC already exists)
+
+The running instance is reachable directly over SSH (root key auth, no password) at
+`root@192.168.178.122`, with the repo checked out at `/app`. To ship a merge to
+`main`:
+
+```bash
+ssh root@192.168.178.122 '
+  cd /app
+  git fetch origin
+  git reset --hard origin/main
+  docker compose up -d --build
+'
+```
+
+`docker compose up -d --build` rebuilds both the `api` and `ui` images and
+recreates the containers; the SQLite DB (NFS bind-mount, outside the containers)
+is untouched. Verify afterward — the `api` container isn't published on the host
+directly (`expose`, not `ports`, in `docker-compose.yml`), so go through the `ui`
+container's published port 8080, which proxies `/api`:
+
+```bash
+ssh root@192.168.178.122 'curl -s http://127.0.0.1:8080/api/health'
+ssh root@192.168.178.122 'curl -s http://127.0.0.1:8080/api/listings | head -c 300'
+```
+
+`curl 127.0.0.1:8000/...` on the LXC will look like it hangs/fails — that's
+expected, not a broken deploy; 8000 is container-internal only.
+
+## 1. Create the LXC (first-time setup only)
 Unprivileged Debian 12 LXC (e.g. CT 113), 2 GB RAM / 12 GB disk, DHCP on
 `192.168.178.0/24`. Install Docker + compose plugin inside it. Note its IP.
 
