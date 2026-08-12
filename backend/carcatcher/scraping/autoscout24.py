@@ -13,7 +13,7 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-from carcatcher.scraping.base import Model, Parser, RawListing
+from carcatcher.scraping.base import FetchResult, Model, Parser, RawListing
 from carcatcher.scraping.battery import parse_battery_kwh
 
 SOURCE = "autoscout24"
@@ -135,13 +135,16 @@ class AutoScout24Parser(Parser):
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(timeout=20.0, headers={"User-Agent": USER_AGENT})
 
-    def fetch_listings(self, model: Model) -> list[RawListing]:
+    def fetch_listings(self, model: Model) -> FetchResult:
         results: list[RawListing] = []
         for page in range(1, 6):  # AS24 pages ~20/each; 5 pages covers this source's v1 volume
             resp = self._client.get(build_search_url(model, page))
             resp.raise_for_status()
             page_listings = parse_search_html(resp.text, model)
             if not page_listings:
-                break
+                # Hit an empty page before the cap — every real listing was seen.
+                return FetchResult(results, complete=True)
             results.extend(page_listings)
-        return results
+        # Reached the page cap without ever seeing an empty page — there may
+        # be more listings beyond page 5 that this fetch never checked.
+        return FetchResult(results, complete=False)

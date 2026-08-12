@@ -75,8 +75,9 @@ def test_fetch_listings_paginates_using_page_max():
         side_effect=[httpx.Response(200, json=page1), httpx.Response(200, json=page2)]
     )
     parser = VwDeParser()
-    listings = parser.fetch_listings("id4")
-    assert len(listings) == 4
+    result = parser.fetch_listings("id4")
+    assert len(result.listings) == 4
+    assert result.complete is True  # pageMax (2) was fully covered
 
 
 @respx.mock
@@ -84,13 +85,15 @@ def test_fetch_listings_stops_at_max_pages_even_when_page_max_is_much_larger():
     """VW.de's live nationwide search can report `pageMax` in the low hundreds
     — uncapped pagination made a single /refresh take 10+ minutes in
     production (2026-08-12). The parser must stop at `_MAX_PAGES` regardless
-    of how large `pageMax` claims to be."""
+    of how large `pageMax` claims to be, and must report the fetch as
+    incomplete so crawl.py never marks un-seen VW.de listings gone off it."""
     route = respx.get(API_URL).mock(
         return_value=httpx.Response(200, json={"meta": {"pageMax": 500}, "cars": []})
     )
     parser = VwDeParser()
-    parser.fetch_listings("id4")
+    result = parser.fetch_listings("id4")
     assert route.call_count == _MAX_PAGES
+    assert result.complete is False
 
 
 def test_battery_kwh_parsed_from_subtitle_when_present():

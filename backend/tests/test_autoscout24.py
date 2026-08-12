@@ -81,8 +81,24 @@ def test_fetch_listings_paginates_until_an_empty_page():
         return_value=httpx.Response(200, text="<html></html>")
     )
     parser = AutoScout24Parser()
-    listings = parser.fetch_listings("id4")
-    assert len(listings) == 3
+    result = parser.fetch_listings("id4")
+    assert len(result.listings) == 3
+    assert result.complete is True  # hit an empty page before the cap
+
+
+@respx.mock
+def test_fetch_listings_is_incomplete_when_the_page_cap_is_hit():
+    """If every one of the 5 capped pages returns results, the parser can't
+    know whether page 6 would have more — must report complete=False so
+    crawl.py never marks un-seen AS24 listings gone off an incomplete fetch."""
+    for page in range(1, 6):
+        respx.get(build_search_url("id4", page)).mock(
+            return_value=httpx.Response(200, text=_html())
+        )
+    parser = AutoScout24Parser()
+    result = parser.fetch_listings("id4")
+    assert len(result.listings) == 3 * 5
+    assert result.complete is False
 
 
 def test_battery_kwh_parsed_from_trim_when_present():

@@ -1,5 +1,6 @@
 """Crawl orchestration: fetch every source x model, upsert into `Listing`, mark
-listings that disappeared from a successfully-crawled source as `gone`."""
+listings that disappeared from a source as `gone` — but only when that
+source's fetch was both error-free and complete (see `FetchResult.complete`)."""
 
 from __future__ import annotations
 
@@ -45,16 +46,19 @@ def run_crawl(
 
     for name, parser in parsers.items():
         source_ok = True
+        source_complete = True
         for model in MODELS:
             try:
-                raw_listings = parser.fetch_listings(model)
+                fetch_result = parser.fetch_listings(model)
             except Exception:
                 logger.exception("crawl failed for source=%s model=%s", name, model)
                 if name not in summary.failed_sources:
                     summary.failed_sources.append(name)
                 source_ok = False
                 continue
-            for raw in raw_listings:
+            if not fetch_result.complete:
+                source_complete = False
+            for raw in fetch_result.listings:
                 seen_keys.add((raw.source, raw.source_id))
                 listing, inserted = _upsert(session, raw)
                 if inserted:
@@ -63,7 +67,11 @@ def run_crawl(
                     summary.updated += 1
                 if geocoder is not None:
                     _resolve_coordinates(session, geocoder, location_cache, geocode_budget, raw, listing)
-        if source_ok:
+        # Only mark a source's un-seen listings `gone` when this crawl actually
+        # covered all of it — a source-specific cap (e.g. a page limit) makes a
+        # fetch `incomplete`, and un-seen listings from an incomplete fetch may
+        # simply be ones the fetch never checked, not ones that vanished.
+        if source_ok and source_complete:
             succeeded_sources.add(name)
 
     summary.gone = _mark_gone(session, succeeded_sources, seen_keys)
@@ -157,9 +165,10 @@ def _lookup_known_coordinates(session: Session, location: str) -> tuple[float, f
 def _mark_gone(
     session: Session, succeeded_sources: set[str], seen_keys: set[tuple[str, str]]
 ) -> int:
-    """Mark `gone` any active listing whose source completed this crawl but whose
-    (source, source_id) wasn't seen. Listings from a failed source are left alone —
-    we have no evidence they actually disappeared."""
+    """Mark `gone` any active listing whose source was crawled successfully AND
+    completely this crawl but whose (source, source_id) wasn't seen. Listings
+    from a failed or incomplete (capped) fetch are left alone — we have no
+    evidence they actually disappeared, only that this fetch didn't check them."""
     if not succeeded_sources:
         return 0
     active = session.exec(
