@@ -14,6 +14,7 @@ import re
 import httpx
 
 from carcatcher.scraping.base import Model, Parser, RawListing
+from carcatcher.scraping.battery import parse_battery_kwh
 
 SOURCE = "vw"
 API_URL = "https://v3-120-0.gsl.feature-app.io/bff/car/search"
@@ -71,19 +72,22 @@ def _car_to_listing(car: dict, model: Model) -> RawListing | None:
     mileage = (car.get("mileage") or {}).get("raw_value")
     year_match = _YEAR_RE.match(car.get("initialreg") or "")
     dealer_city = ((car.get("dealer") or {}).get("city") or {}).get("value")
+    trim = (car.get("subtitle") or {}).get("value") or car.get("title") or ""
+    title = car.get("title") or ""
     return RawListing(
         source=SOURCE,
         source_id=str(carid),
         url=DETAIL_URL.format(key=key),
         model=model,
-        trim=(car.get("subtitle") or {}).get("value") or car.get("title") or "",
+        trim=trim,
         price_eur=int(price) if price is not None else None,
         mileage_km=int(mileage) if mileage is not None else None,
         year=int(year_match.group(1)) if year_match else None,
         power_kw=_power_kw(car.get("powerLabel")),
+        battery_kwh=parse_battery_kwh(trim, title),
         condition=_condition(car),
         location=dealer_city,
-        title=car.get("title") or "",
+        title=title,
     )
 
 

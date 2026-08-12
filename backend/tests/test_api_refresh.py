@@ -19,7 +19,7 @@ def _raw(source_id):
     return RawListing(
         source="vw", source_id=source_id, url=f"https://x/{source_id}", model="id4",
         trim="Pro", price_eur=30000, mileage_km=1000, year=2024, power_kw=150,
-        condition="used", location="Berlin", title="VW ID.4 Pro",
+        battery_kwh=None, condition="used", location="Berlin", title="VW ID.4 Pro",
     )
 
 

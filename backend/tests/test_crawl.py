@@ -34,11 +34,11 @@ class FailingParser:
         raise RuntimeError("boom")
 
 
-def _raw(source, source_id, model="id4", price=30000):
+def _raw(source, source_id, model="id4", price=30000, location="Berlin"):
     return RawListing(
         source=source, source_id=source_id, url=f"https://x/{source_id}",
         model=model, trim="Pro", price_eur=price, mileage_km=1000, year=2024,
-        power_kw=150, condition="used", location="Berlin", title="VW ID.4 Pro",
+        power_kw=150, battery_kwh=None, condition="used", location=location, title="VW ID.4 Pro",
     )
 
 

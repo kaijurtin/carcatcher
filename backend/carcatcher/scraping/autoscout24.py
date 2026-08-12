@@ -14,6 +14,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from carcatcher.scraping.base import Model, Parser, RawListing
+from carcatcher.scraping.battery import parse_battery_kwh
 
 SOURCE = "autoscout24"
 BASE_URL = "https://www.autoscout24.de"
@@ -84,22 +85,25 @@ def _item_to_listing(item: dict, model: Model) -> RawListing | None:
     url = url if url.startswith("http") else f"{BASE_URL}{url}"
     details = _details(item.get("vehicleDetails") or [])
     loc = item.get("location") or {}
+    trim = vehicle.get("modelVersionInput") or vehicle.get("subtitle") or ""
+    title = " ".join(
+        p for p in (vehicle.get("make"), vehicle.get("model"), vehicle.get("modelVersionInput"))
+        if p
+    )
     return RawListing(
         source=SOURCE,
         source_id=_source_id(url),
         url=url,
         model=model,
-        trim=vehicle.get("modelVersionInput") or vehicle.get("subtitle") or "",
+        trim=trim,
         price_eur=_to_int((item.get("price") or {}).get("priceFormatted")),
         mileage_km=details.get("mileage_km"),
         year=details.get("year"),
         power_kw=details.get("power_kw"),
+        battery_kwh=parse_battery_kwh(trim, title),
         condition=_condition(vehicle),
         location=" ".join(p for p in (loc.get("zip"), loc.get("city")) if p) or None,
-        title=" ".join(
-            p for p in (vehicle.get("make"), vehicle.get("model"), vehicle.get("modelVersionInput"))
-            if p
-        ),
+        title=title,
     )
 
 
