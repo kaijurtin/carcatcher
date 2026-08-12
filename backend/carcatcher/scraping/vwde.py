@@ -25,6 +25,15 @@ DETAIL_URL = (
 
 _MODEL_CODES: dict[Model, str] = {"id3": "BQID", "id4": "BQIE"}
 
+# VW.de's live nationwide inventory search can report `pageMax` in the low
+# hundreds (observed 2026-08-12: 109 for id4, 159 for id3, at 12 cars/page) —
+# fetching every page made a single /refresh take 10+ minutes and blow every
+# proxy timeout in front of it (nginx, Cloudflare). Capped to roughly
+# AutoScout24's per-model volume (~100-120 listings); this bounds crawl time
+# but is a real coverage tradeoff, not just a perf tweak — VW.de's true
+# inventory is larger than what one refresh now sees.
+_MAX_PAGES = 10
+
 # Static per-deploy credentials for VW's onehub_pkw "publish" feature-app config,
 # verified live 2026-08-11 to work from a fresh, cookie-less request (not
 # session-bound). If VW redeploys and rotates `dataVersion`, calls will start
@@ -121,7 +130,7 @@ class VwDeParser(Parser):
         results: list[RawListing] = []
         page = 1
         page_max = 1
-        while page <= page_max:
+        while page <= min(page_max, _MAX_PAGES):
             resp = self._client.get(API_URL, params=build_params(model, page))
             resp.raise_for_status()
             data = resp.json()
