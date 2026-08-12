@@ -39,8 +39,11 @@ class Listing(SQLModel, table=True):
     mileage_km: int | None = None
     year: int | None = None
     power_kw: int | None = None
+    battery_kwh: float | None = None
     condition: str = "used"  # "new" | "used"
     location: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     title: str = ""
     tag: str | None = None  # "star" | "plus" | "minus" | "1".."10"
 

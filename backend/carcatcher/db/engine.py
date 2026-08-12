@@ -46,6 +46,9 @@ def set_engine(engine: Engine) -> None:
 # onto an already-deployed SQLite file, or production reads/writes break.
 _ADDED_COLUMNS: dict[str, str] = {
     "tag": "TEXT",
+    "battery_kwh": "REAL",
+    "latitude": "REAL",
+    "longitude": "REAL",
 }
 
 
