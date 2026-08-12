@@ -154,4 +154,66 @@ describe("ListingsTable", () => {
     fireEvent.change(screen.getByLabelText("Tag for Pro Performance"), { target: { value: "" } });
     expect(onTagChange).toHaveBeenCalledWith(1, null);
   });
+
+  it("adds a shift+click column as a tiebreaker without resetting the primary sort", () => {
+    const tieBreakListings: Listing[] = [
+      { ...listing, id: 1, trim: "Bravo", price_eur: 20000 },
+      { ...listing, id: 2, trim: "Alpha", price_eur: 20000 },
+      { ...listing, id: 3, trim: "Charlie", price_eur: 10000 },
+    ];
+    render(<ListingsTable items={tieBreakListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
+
+    const order = rowTrims();
+    expect(order[0]).toContain("Charlie"); // 10000, sole cheapest
+    expect(order[1]).toContain("Alpha"); // tied at 20000, "Alpha" < "Bravo"
+    expect(order[2]).toContain("Bravo");
+  });
+
+  it("shift+click on an already-active column toggles its direction in place", () => {
+    const tieBreakListings: Listing[] = [
+      { ...listing, id: 1, trim: "Bravo", price_eur: 20000 },
+      { ...listing, id: 2, trim: "Alpha", price_eur: 20000 },
+      { ...listing, id: 3, trim: "Charlie", price_eur: 10000 },
+    ];
+    render(<ListingsTable items={tieBreakListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
+
+    const order = rowTrims();
+    expect(order[0]).toContain("Charlie");
+    expect(order[1]).toContain("Bravo"); // tiebreaker now descending: "Bravo" > "Alpha"
+    expect(order[2]).toContain("Alpha");
+  });
+
+  it("plain click resets a multi-column sort back to a single key", () => {
+    const tieBreakListings: Listing[] = [
+      { ...listing, id: 1, trim: "Bravo", price_eur: 20000 },
+      { ...listing, id: 2, trim: "Alpha", price_eur: 10000 },
+    ];
+    render(<ListingsTable items={tieBreakListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" })); // plain click
+
+    const order = rowTrims();
+    expect(order[0]).toContain("Alpha"); // ascending by Trim alone now
+    expect(order[1]).toContain("Bravo");
+  });
+
+  it("shows a rank badge on each header only when more than one sort key is active", () => {
+    render(<ListingsTable items={threeListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Price" }));
+    expect(screen.getByRole("button", { name: "Sort by Price" }).textContent).not.toMatch(/①/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
+    expect(screen.getByRole("button", { name: "Sort by Price" }).textContent).toContain("①");
+    expect(screen.getByRole("button", { name: "Sort by Trim" }).textContent).toContain("②");
+  });
 });
