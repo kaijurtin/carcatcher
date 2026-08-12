@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
+import carcatcher.crawl as crawl_module
 from carcatcher.crawl import run_crawl
 from carcatcher.db.models import Listing, ListingStatus
 from carcatcher.scraping.base import RawListing
@@ -169,6 +170,50 @@ def test_reuses_cached_coordinates_for_a_repeated_location_within_one_crawl():
         rows = {r.source_id: r for r in session.exec(select(Listing)).all()}
         assert rows["1"].latitude == 52.52
         assert rows["2"].latitude == 52.52
+
+
+def test_geocode_budget_caps_live_calls_per_crawl(monkeypatch):
+    engine = _engine()
+    monkeypatch.setattr(crawl_module, "MAX_GEOCODES_PER_CRAWL", 2)
+    geocoder = FakeGeocoder(
+        {"City-0": (0.0, 0.0), "City-1": (1.0, 1.0), "City-2": (2.0, 2.0)}
+    )
+    listings = [_raw("vw", str(i), location=f"City-{i}") for i in range(3)]
+    with Session(engine) as session:
+        run_crawl(session, {"vw": FakeParser("vw", {"id4": listings, "id3": []})}, geocoder)
+        # Budget of 2 -> only the first 2 distinct locations get a live geocode call.
+        assert geocoder.calls == ["City-0", "City-1"]
+        rows = {r.source_id: r for r in session.exec(select(Listing)).all()}
+        assert rows["0"].latitude == 0.0
+        assert rows["1"].latitude == 1.0
+        # Third listing's location was never geocoded this crawl -> left for later.
+        assert rows["2"].latitude is None
+        assert rows["2"].longitude is None
+
+
+def test_upsert_clears_stale_coordinates_when_location_changes():
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1", location="Berlin")], "id3": []})},
+            FakeGeocoder({"Berlin": (52.52, 13.40)}),
+        )
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.latitude == 52.52
+        assert row.longitude == 13.40
+
+    # Same (source, source_id) relists under a new location -> stale Berlin
+    # coordinates must not survive attached to a listing now in Hamburg.
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1", location="Hamburg")], "id3": []})},
+        )
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.location == "Hamburg"
+        assert row.latitude is None
+        assert row.longitude is None
 
 
 def test_reuses_coordinates_already_known_in_the_db_without_calling_the_geocoder():

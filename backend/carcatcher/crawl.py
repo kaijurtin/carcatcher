@@ -15,6 +15,13 @@ from carcatcher.scraping.base import Model, Parser, RawListing
 
 logger = logging.getLogger(__name__)
 
+# Bounds a single /refresh call's worst-case wall time against Nominatim's
+# 1 request/second throttle. At 60, worst case adds ~60s — comfortably under
+# both nginx's 120s proxy_read_timeout and Cloudflare's 100s 524 cutoff.
+# Locations beyond the budget stay ungeocoded this crawl and are picked up
+# on a later one, same as any other not-yet-geocoded location.
+MAX_GEOCODES_PER_CRAWL = 60
+
 MODELS: tuple[Model, ...] = ("id3", "id4")
 
 
@@ -34,6 +41,7 @@ def run_crawl(
     seen_keys: set[tuple[str, str]] = set()
     succeeded_sources: set[str] = set()
     location_cache: dict[str, tuple[float, float] | None] = {}
+    geocode_budget = [MAX_GEOCODES_PER_CRAWL]  # mutable single-element list: threaded by reference
 
     for name, parser in parsers.items():
         source_ok = True
@@ -54,7 +62,7 @@ def run_crawl(
                 else:
                     summary.updated += 1
                 if geocoder is not None:
-                    _resolve_coordinates(session, geocoder, location_cache, raw, listing)
+                    _resolve_coordinates(session, geocoder, location_cache, geocode_budget, raw, listing)
         if source_ok:
             succeeded_sources.add(name)
 
@@ -80,6 +88,9 @@ def _upsert(session: Session, raw: RawListing) -> tuple[Listing, bool]:
         existing.power_kw = raw.power_kw
         existing.battery_kwh = raw.battery_kwh
         existing.condition = raw.condition
+        if existing.location != raw.location:
+            existing.latitude = None
+            existing.longitude = None
         existing.location = raw.location
         existing.title = raw.title
         existing.status = ListingStatus.ACTIVE.value
@@ -101,21 +112,29 @@ def _resolve_coordinates(
     session: Session,
     geocoder: Geocoder,
     cache: dict[str, tuple[float, float] | None],
+    budget: list[int],
     raw: RawListing,
     listing: Listing,
 ) -> None:
     """Fill `listing.latitude`/`longitude` from `raw.location`, reusing
     coordinates already known for that exact location string — first from
     this crawl's in-memory cache, then from any other listing already
-    geocoded in the DB — before ever calling the live geocoder."""
+    geocoded in the DB — before ever calling the live geocoder. Live calls
+    are capped per crawl by `budget` (see MAX_GEOCODES_PER_CRAWL); once
+    exhausted, unresolved locations are simply left for a later crawl."""
     if listing.latitude is not None and listing.longitude is not None:
         return
     if not raw.location:
         return
     if raw.location not in cache:
-        cache[raw.location] = _lookup_known_coordinates(session, raw.location) or geocoder.geocode(
-            raw.location
-        )
+        known = _lookup_known_coordinates(session, raw.location)
+        if known is not None:
+            cache[raw.location] = known
+        elif budget[0] > 0:
+            budget[0] -= 1
+            cache[raw.location] = geocoder.geocode(raw.location)
+        else:
+            return
     coords = cache[raw.location]
     if coords is not None:
         listing.latitude, listing.longitude = coords
@@ -125,7 +144,11 @@ def _resolve_coordinates(
 def _lookup_known_coordinates(session: Session, location: str) -> tuple[float, float] | None:
     row = session.exec(
         select(Listing.latitude, Listing.longitude)
-        .where(Listing.location == location, Listing.latitude.is_not(None))
+        .where(
+            Listing.location == location,
+            Listing.latitude.is_not(None),
+            Listing.longitude.is_not(None),
+        )
         .limit(1)
     ).first()
     return (row[0], row[1]) if row else None

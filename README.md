@@ -39,8 +39,12 @@ docker-compose.yml   api + ui
 - `GET /api/listings?model=id3|id4&max_price=&max_km=&trim=&source=&status=` —
   filtered listing rows (defaults to `status=active`).
 - `POST /api/refresh` — synchronously runs both scrapers across both models,
-  upserts into the `Listing` table, marks listings that disappeared as `gone`,
-  and returns `{added, updated, gone, failed_sources, refreshed_at}`.
+  upserts into the `Listing` table, geocodes each new/changed listing location
+  via the free Nominatim (OpenStreetMap) API (rate-limited to 1 request/second,
+  capped per crawl — see `MAX_GEOCODES_PER_CRAWL` in `carcatcher/crawl.py`, so a
+  refresh with many unfamiliar cities may take a bit longer and finish
+  geocoding the rest on a later refresh), marks listings that disappeared as
+  `gone`, and returns `{added, updated, gone, failed_sources, refreshed_at}`.
 - `GET /api/health` — health check.
 
 ## Development
@@ -83,8 +87,12 @@ exposes on the host).
 Runs as an unprivileged Debian LXC on Proxmox with Docker Compose inside,
 exposed via the shared nginx reverse proxy and Cloudflare Tunnel. See
 `deploy/proxmox/`. Tables are created on startup if missing
-(`SQLModel.metadata.create_all`); there is no schema migration tooling, so a
-breaking schema change needs the SQLite file deleted manually before restart.
+(`SQLModel.metadata.create_all`); there is no general schema migration
+tooling, but new nullable columns added to an existing table (e.g. `tag`,
+`battery_kwh`, `latitude`, `longitude`) are non-destructively backfilled at
+startup via `_ADDED_COLUMNS` in `carcatcher/db/engine.py`. A structural change
+beyond adding a nullable column (renaming/dropping a column, changing a type)
+still has no tooling and needs the SQLite file handled manually.
 
 ```bash
 git pull && docker compose up --build -d
