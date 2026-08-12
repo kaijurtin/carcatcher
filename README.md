@@ -94,6 +94,12 @@ startup via `_ADDED_COLUMNS` in `carcatcher/db/engine.py`. A structural change
 beyond adding a nullable column (renaming/dropping a column, changing a type)
 still has no tooling and needs the SQLite file handled manually.
 
+To ship a merge to `main`, from any machine with SSH access to the LXC:
+
 ```bash
-git pull && docker compose up --build -d
+ssh root@192.168.178.122 'cd /app && git fetch origin && git reset --hard origin/main && docker compose up -d --build'
 ```
+
+See `deploy/proxmox/README.md` for first-time LXC setup and post-deploy
+verification (the `api` container isn't published on the host directly — go
+through the `ui` container's port 8080, which proxies `/api`).
