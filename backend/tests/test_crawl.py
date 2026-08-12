@@ -8,7 +8,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 import carcatcher.crawl as crawl_module
 from carcatcher.crawl import run_crawl
 from carcatcher.db.models import Listing, ListingStatus
-from carcatcher.scraping.base import RawListing
+from carcatcher.scraping.base import FetchResult, RawListing
 
 
 def _engine():
@@ -20,12 +20,13 @@ def _engine():
 
 
 class FakeParser:
-    def __init__(self, name, by_model):
+    def __init__(self, name, by_model, complete=True):
         self.name = name
         self._by_model = by_model
+        self._complete = complete
 
     def fetch_listings(self, model):
-        return self._by_model.get(model, [])
+        return FetchResult(self._by_model.get(model, []), complete=self._complete)
 
 
 class FailingParser:
@@ -88,6 +89,32 @@ def test_failed_source_does_not_mark_its_listings_gone():
         assert summary.gone == 0
         row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
         assert row.status == ListingStatus.ACTIVE.value
+
+
+def test_incomplete_fetch_does_not_mark_unseen_listings_gone():
+    """A source-specific cap (e.g. AS24/VW.de's page limits) can make a fetch
+    `complete=False` even though it succeeded — un-seen listings from an
+    incomplete fetch must be left alone, since the fetch never actually
+    checked whether they're still there. Production incident 2026-08-12:
+    capping VW.de's pagination without this guard wrongly marked ~3000 still
+    -active listings `gone` purely because they fell outside the cap."""
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1"), _raw("vw", "2")], "id3": []})},
+        )
+
+    with Session(engine) as session:
+        # This crawl only reports listing "1" and is explicitly incomplete
+        # (as if it hit a page cap) — listing "2" must stay active.
+        summary = run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1")], "id3": []}, complete=False)},
+        )
+        assert summary.gone == 0
+        row2 = session.exec(select(Listing).where(Listing.source_id == "2")).one()
+        assert row2.status == ListingStatus.ACTIVE.value
 
 
 def test_one_source_failing_does_not_stop_another_source_succeeding():

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from carcatcher.app_state import AppState, set_state
-from carcatcher.scraping.base import RawListing
+from carcatcher.scraping.base import FetchResult, RawListing
 
 
 class _FakeParser:
@@ -12,7 +12,7 @@ class _FakeParser:
         self._listings = listings
 
     def fetch_listings(self, model):
-        return [l for l in self._listings if l.model == model]
+        return FetchResult([l for l in self._listings if l.model == model], complete=True)
 
 
 def _raw(source_id):

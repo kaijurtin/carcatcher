@@ -13,7 +13,7 @@ import re
 
 import httpx
 
-from carcatcher.scraping.base import Model, Parser, RawListing
+from carcatcher.scraping.base import FetchResult, Model, Parser, RawListing
 from carcatcher.scraping.battery import parse_battery_kwh
 
 SOURCE = "vw"
@@ -126,7 +126,7 @@ class VwDeParser(Parser):
     def __init__(self, client: httpx.Client | None = None) -> None:
         self._client = client or httpx.Client(timeout=20.0)
 
-    def fetch_listings(self, model: Model) -> list[RawListing]:
+    def fetch_listings(self, model: Model) -> FetchResult:
         results: list[RawListing] = []
         page = 1
         page_max = 1
@@ -137,4 +137,6 @@ class VwDeParser(Parser):
             results.extend(parse_search_response(data, model))
             page_max = (data.get("meta") or {}).get("pageMax", page)
             page += 1
-        return results
+        # Complete only if we actually covered every page VW.de reported —
+        # if page_max exceeds the cap, real listings beyond it were never seen.
+        return FetchResult(results, complete=page_max <= _MAX_PAGES)
