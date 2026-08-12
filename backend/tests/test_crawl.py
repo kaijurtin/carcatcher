@@ -99,3 +99,97 @@ def test_one_source_failing_does_not_stop_another_source_succeeding():
         summary = run_crawl(session, parsers)
         assert summary.added == 1
         assert summary.failed_sources == ["vw"]
+
+
+class FakeGeocoder:
+    def __init__(self, coords_by_location):
+        self._coords = coords_by_location
+        self.calls: list[str] = []
+
+    def geocode(self, location):
+        self.calls.append(location)
+        return self._coords.get(location)
+
+
+def test_geocodes_a_new_listing_with_a_location():
+    engine = _engine()
+    geocoder = FakeGeocoder({"Berlin": (52.52, 13.40)})
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1")], "id3": []})},
+            geocoder,
+        )
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.latitude == 52.52
+        assert row.longitude == 13.40
+
+
+def test_no_geocoder_leaves_coordinates_null():
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(session, {"vw": FakeParser("vw", {"id4": [_raw("vw", "1")], "id3": []})})
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.latitude is None
+        assert row.longitude is None
+
+
+def test_geocoding_failure_leaves_coordinates_null():
+    engine = _engine()
+    geocoder = FakeGeocoder({})  # no known locations -> geocode() returns None for everything
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1", location="Nowhereville")], "id3": []})},
+            geocoder,
+        )
+        row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        assert row.latitude is None
+        assert geocoder.calls == ["Nowhereville"]
+
+
+def test_reuses_cached_coordinates_for_a_repeated_location_within_one_crawl():
+    engine = _engine()
+    geocoder = FakeGeocoder({"Berlin": (52.52, 13.40)})
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {
+                "vw": FakeParser(
+                    "vw",
+                    {
+                        "id4": [_raw("vw", "1", location="Berlin"), _raw("vw", "2", location="Berlin")],
+                        "id3": [],
+                    },
+                )
+            },
+            geocoder,
+        )
+        assert geocoder.calls == ["Berlin"]  # geocoded once, reused for the second listing
+        rows = {r.source_id: r for r in session.exec(select(Listing)).all()}
+        assert rows["1"].latitude == 52.52
+        assert rows["2"].latitude == 52.52
+
+
+def test_reuses_coordinates_already_known_in_the_db_without_calling_the_geocoder():
+    engine = _engine()
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "1", location="Berlin")], "id3": []})},
+            FakeGeocoder({"Berlin": (52.52, 13.40)}),
+        )
+
+    # Second crawl, a different listing, same location string, with a geocoder
+    # that has no known coordinates — proves the DB-known coordinate is reused
+    # instead of calling the (here, failing) live geocoder.
+    geocoder = FakeGeocoder({})
+    with Session(engine) as session:
+        run_crawl(
+            session,
+            {"vw": FakeParser("vw", {"id4": [_raw("vw", "2", location="Berlin")], "id3": []})},
+            geocoder,
+        )
+        row = session.exec(select(Listing).where(Listing.source_id == "2")).one()
+        assert row.latitude == 52.52
+        assert geocoder.calls == []

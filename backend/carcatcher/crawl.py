@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 
 from carcatcher.db.models import Listing, ListingStatus
+from carcatcher.geocoding import Geocoder
 from carcatcher.scraping.base import Model, Parser, RawListing
 
 logger = logging.getLogger(__name__)
@@ -26,10 +27,13 @@ class CrawlSummary:
     refreshed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-def run_crawl(session: Session, parsers: dict[str, Parser]) -> CrawlSummary:
+def run_crawl(
+    session: Session, parsers: dict[str, Parser], geocoder: Geocoder | None = None
+) -> CrawlSummary:
     summary = CrawlSummary()
     seen_keys: set[tuple[str, str]] = set()
     succeeded_sources: set[str] = set()
+    location_cache: dict[str, tuple[float, float] | None] = {}
 
     for name, parser in parsers.items():
         source_ok = True
@@ -44,10 +48,13 @@ def run_crawl(session: Session, parsers: dict[str, Parser]) -> CrawlSummary:
                 continue
             for raw in raw_listings:
                 seen_keys.add((raw.source, raw.source_id))
-                if _upsert(session, raw):
+                listing, inserted = _upsert(session, raw)
+                if inserted:
                     summary.added += 1
                 else:
                     summary.updated += 1
+                if geocoder is not None:
+                    _resolve_coordinates(session, geocoder, location_cache, raw, listing)
         if source_ok:
             succeeded_sources.add(name)
 
@@ -56,8 +63,9 @@ def run_crawl(session: Session, parsers: dict[str, Parser]) -> CrawlSummary:
     return summary
 
 
-def _upsert(session: Session, raw: RawListing) -> bool:
-    """Insert or update the `Listing` row for `raw`. Returns True if newly inserted."""
+def _upsert(session: Session, raw: RawListing) -> tuple[Listing, bool]:
+    """Insert or update the `Listing` row for `raw`. Returns (listing, True if
+    newly inserted)."""
     now = datetime.now(timezone.utc)
     existing = session.exec(
         select(Listing).where(Listing.source == raw.source, Listing.source_id == raw.source_id)
@@ -70,23 +78,57 @@ def _upsert(session: Session, raw: RawListing) -> bool:
         existing.mileage_km = raw.mileage_km
         existing.year = raw.year
         existing.power_kw = raw.power_kw
+        existing.battery_kwh = raw.battery_kwh
         existing.condition = raw.condition
         existing.location = raw.location
         existing.title = raw.title
         existing.status = ListingStatus.ACTIVE.value
         existing.last_seen_at = now
         session.add(existing)
-        return False
-    session.add(
-        Listing(
-            source=raw.source, source_id=raw.source_id, url=raw.url, model=raw.model,
-            trim=raw.trim, price_eur=raw.price_eur, mileage_km=raw.mileage_km,
-            year=raw.year, power_kw=raw.power_kw, condition=raw.condition,
-            location=raw.location, title=raw.title, status=ListingStatus.ACTIVE.value,
-            first_seen_at=now, last_seen_at=now,
-        )
+        return existing, False
+    listing = Listing(
+        source=raw.source, source_id=raw.source_id, url=raw.url, model=raw.model,
+        trim=raw.trim, price_eur=raw.price_eur, mileage_km=raw.mileage_km,
+        year=raw.year, power_kw=raw.power_kw, battery_kwh=raw.battery_kwh,
+        condition=raw.condition, location=raw.location, title=raw.title,
+        status=ListingStatus.ACTIVE.value, first_seen_at=now, last_seen_at=now,
     )
-    return True
+    session.add(listing)
+    return listing, True
+
+
+def _resolve_coordinates(
+    session: Session,
+    geocoder: Geocoder,
+    cache: dict[str, tuple[float, float] | None],
+    raw: RawListing,
+    listing: Listing,
+) -> None:
+    """Fill `listing.latitude`/`longitude` from `raw.location`, reusing
+    coordinates already known for that exact location string — first from
+    this crawl's in-memory cache, then from any other listing already
+    geocoded in the DB — before ever calling the live geocoder."""
+    if listing.latitude is not None and listing.longitude is not None:
+        return
+    if not raw.location:
+        return
+    if raw.location not in cache:
+        cache[raw.location] = _lookup_known_coordinates(session, raw.location) or geocoder.geocode(
+            raw.location
+        )
+    coords = cache[raw.location]
+    if coords is not None:
+        listing.latitude, listing.longitude = coords
+        session.add(listing)
+
+
+def _lookup_known_coordinates(session: Session, location: str) -> tuple[float, float] | None:
+    row = session.exec(
+        select(Listing.latitude, Listing.longitude)
+        .where(Listing.location == location, Listing.latitude.is_not(None))
+        .limit(1)
+    ).first()
+    return (row[0], row[1]) if row else None
 
 
 def _mark_gone(
