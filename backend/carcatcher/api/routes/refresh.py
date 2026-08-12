@@ -26,9 +26,9 @@ class RefreshSummary(BaseModel):
 
 @router.post("/refresh", response_model=RefreshSummary)
 def refresh() -> RefreshSummary:
-    parsers = get_state().parsers
+    state = get_state()
     with Session(get_engine()) as session:
-        summary = run_crawl(session, parsers)
+        summary = run_crawl(session, state.parsers, state.geocoder)
     return RefreshSummary(
         added=summary.added,
         updated=summary.updated,

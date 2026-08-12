@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Listing } from "../types";
-import { formatKm, formatPrice, formatYear } from "../lib/format";
+import { formatBatteryKwh, formatDistanceKm, formatKm, formatPrice, formatYear } from "../lib/format";
 
 export const SOURCE_LABEL: Record<string, string> = {
   vw: "VW.de",
@@ -46,11 +46,13 @@ type SortField =
   | "mileage_km"
   | "year"
   | "power_kw"
+  | "battery_kwh"
   | "condition"
   | "location"
+  | "distance_km"
   | "source";
 
-interface SortState {
+interface SortKey {
   field: SortField;
   direction: "asc" | "desc";
 }
@@ -78,10 +80,22 @@ function compareValues(av: unknown, bv: unknown, isText: boolean, direction: "as
   return direction === "asc" ? cmp : -cmp;
 }
 
-function sortListings(items: Listing[], sort: SortState | null): Listing[] {
-  if (!sort) return items;
-  const isText = TEXT_SORT_FIELDS.has(sort.field);
-  return [...items].sort((a, b) => compareValues(sortValue(a, sort.field), sortValue(b, sort.field), isText, sort.direction));
+function sortListings(items: Listing[], sort: SortKey[]): Listing[] {
+  if (sort.length === 0) return items;
+  return [...items].sort((a, b) => {
+    for (const key of sort) {
+      const isText = TEXT_SORT_FIELDS.has(key.field);
+      const cmp = compareValues(sortValue(a, key.field), sortValue(b, key.field), isText, key.direction);
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+}
+
+const RANK_BADGES = ["①", "②", "③", "④", "⑤"];
+
+function rankBadge(index: number): string {
+  return RANK_BADGES[index] ?? `(${index + 1})`;
 }
 
 interface ListingsTableProps {
@@ -95,11 +109,18 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
   const f = filters;
   const set = (patch: Partial<TableFilters>) => onFilterChange({ ...f, ...patch });
 
-  const [sort, setSort] = useState<SortState | null>(null);
-  const onSort = (field: SortField) => {
-    setSort((prev) =>
-      prev?.field === field ? { field, direction: prev.direction === "asc" ? "desc" : "asc" } : { field, direction: "asc" },
-    );
+  const [sort, setSort] = useState<SortKey[]>([]);
+  const onSort = (field: SortField, shiftKey: boolean) => {
+    setSort((prev) => {
+      if (!shiftKey) {
+        const isSoleActiveKey = prev.length === 1 && prev[0].field === field;
+        const direction = isSoleActiveKey && prev[0].direction === "asc" ? "desc" : "asc";
+        return [{ field, direction }];
+      }
+      const idx = prev.findIndex((k) => k.field === field);
+      if (idx === -1) return [...prev, { field, direction: "asc" }];
+      return prev.map((k, i) => (i === idx ? { ...k, direction: k.direction === "asc" ? "desc" : "asc" } : k));
+    });
   };
   const sortedItems = sortListings(items, sort);
 
@@ -114,8 +135,10 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
             <SortableHeader label="KM" field="mileage_km" sort={sort} onSort={onSort} />
             <SortableHeader label="Year" field="year" sort={sort} onSort={onSort} />
             <SortableHeader label="Power" field="power_kw" sort={sort} onSort={onSort} />
+            <SortableHeader label="Battery" field="battery_kwh" sort={sort} onSort={onSort} />
             <SortableHeader label="Condition" field="condition" sort={sort} onSort={onSort} />
             <SortableHeader label="Location" field="location" sort={sort} onSort={onSort} />
+            <SortableHeader label="Distance" field="distance_km" sort={sort} onSort={onSort} />
             <SortableHeader label="Source" field="source" sort={sort} onSort={onSort} />
             <th className="px-4 py-3 font-medium">Tag</th>
             <th className="px-4 py-3 font-medium" />
@@ -171,6 +194,8 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
             <th className="px-4 py-2" />
             <th className="px-4 py-2" />
             <th className="px-4 py-2" />
+            <th className="px-4 py-2" />
+            <th className="px-4 py-2" />
             <th className="px-4 py-2">
               <select
                 aria-label="Filter source"
@@ -192,7 +217,7 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
         <tbody className="divide-y divide-slate-100">
           {items.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+              <td colSpan={13} className="px-4 py-12 text-center text-slate-500">
                 No listings match these filters.
               </td>
             </tr>
@@ -213,12 +238,14 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {l.power_kw != null ? `${l.power_kw} kW` : "—"}
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatBatteryKwh(l.battery_kwh)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {CONDITION_LABEL[l.condition] ?? l.condition}
                 </td>
                 <td className="max-w-[12rem] px-4 py-3 text-slate-600">
                   <span className="line-clamp-1">{l.location ?? "—"}</span>
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDistanceKm(l.distance_km)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                   {SOURCE_LABEL[l.source] ?? l.source}
                 </td>
@@ -258,22 +285,25 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
 interface SortableHeaderProps {
   label: string;
   field: SortField;
-  sort: SortState | null;
-  onSort: (field: SortField) => void;
+  sort: SortKey[];
+  onSort: (field: SortField, shiftKey: boolean) => void;
 }
 
 function SortableHeader({ label, field, sort, onSort }: SortableHeaderProps) {
-  const active = sort?.field === field;
-  const arrow = active ? (sort?.direction === "asc" ? " ▲" : " ▼") : "";
+  const index = sort.findIndex((k) => k.field === field);
+  const active = index !== -1;
+  const arrow = active ? (sort[index].direction === "asc" ? " ▲" : " ▼") : "";
+  const badge = active && sort.length > 1 ? ` ${rankBadge(index)}` : "";
   return (
     <th className="px-4 py-3 font-medium">
       <button
         type="button"
-        onClick={() => onSort(field)}
+        onClick={(e) => onSort(field, e.shiftKey)}
         aria-label={`Sort by ${label}`}
         className={`uppercase tracking-wide ${active ? "text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
       >
         {label}
+        {badge}
         {arrow}
       </button>
     </th>

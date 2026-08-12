@@ -64,7 +64,7 @@ def test_status_can_be_set_to_gone_and_round_trips():
 
 
 def test_removed_legacy_fields_are_not_on_the_model():
-    for field in ("battery_kwh", "make", "deal_score", "ai_evaluation", "fair_price_estimate"):
+    for field in ("make", "deal_score", "ai_evaluation", "fair_price_estimate"):
         assert field not in Listing.model_fields
 
 
@@ -138,6 +138,81 @@ def test_init_db_adds_tag_column_to_an_existing_table_without_losing_data():
                 select(Listing).where(Listing.source_id == "1")
             ).one()
             assert row.tag is None
+            assert row.title == "A"  # pre-existing data untouched
+    finally:
+        db_engine.set_engine(None)  # type: ignore[arg-type]
+
+
+def test_battery_and_coordinates_default_to_none_and_round_trip():
+    engine = _engine()
+    with Session(engine) as session:
+        session.add(
+            Listing(source="vw", source_id="1", url="https://x/1", model="id4", title="A")
+        )
+        session.add(
+            Listing(
+                source="vw", source_id="2", url="https://x/2", model="id4", title="B",
+                battery_kwh=82.0, latitude=52.52, longitude=13.40,
+            )
+        )
+        session.commit()
+        bare = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+        filled = session.exec(select(Listing).where(Listing.source_id == "2")).one()
+        assert bare.battery_kwh is None
+        assert bare.latitude is None
+        assert bare.longitude is None
+        assert filled.battery_kwh == 82.0
+        assert filled.latitude == 52.52
+        assert filled.longitude == 13.40
+
+
+def test_init_db_adds_battery_and_coordinate_columns_to_an_existing_table_without_losing_data():
+    """Mirrors the `tag` backfill test above for the three columns this
+    feature adds — production may already have `tag` from a prior deploy but
+    not yet these."""
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    with engine.connect() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE listing (
+                id INTEGER PRIMARY KEY,
+                source TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                model TEXT NOT NULL,
+                trim TEXT NOT NULL,
+                price_eur INTEGER,
+                mileage_km INTEGER,
+                year INTEGER,
+                power_kw INTEGER,
+                condition TEXT NOT NULL,
+                location TEXT,
+                title TEXT NOT NULL,
+                tag TEXT,
+                status TEXT NOT NULL,
+                first_seen_at DATETIME NOT NULL,
+                last_seen_at DATETIME NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO listing (id, source, source_id, url, model, trim, condition, title, "
+            "status, first_seen_at, last_seen_at) VALUES "
+            "(1, 'vw', '1', 'https://x/1', 'id4', '', 'used', 'A', 'active', "
+            "'2026-01-01T00:00:00', '2026-01-01T00:00:00')"
+        )
+        conn.commit()
+
+    db_engine.set_engine(engine)
+    try:
+        db_engine.init_db()
+        with Session(engine) as session:
+            row = session.exec(select(Listing).where(Listing.source_id == "1")).one()
+            assert row.battery_kwh is None
+            assert row.latitude is None
+            assert row.longitude is None
             assert row.title == "A"  # pre-existing data untouched
     finally:
         db_engine.set_engine(None)  # type: ignore[arg-type]

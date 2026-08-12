@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     app_name: str = "CarCatcher"
     # SQLite file path. In production this lives on the NFS bind-mount.
     database_path: str = "./data/carcatcher.db"
+    # Fixed home point for distance-to-listing sorting: Nominatim's centroid
+    # for German postal code 66663 (Merzig), verified live 2026-08-12.
+    home_latitude: float = 49.4465237
+    home_longitude: float = 6.6269649
 
     @property
     def database_url(self) -> str:

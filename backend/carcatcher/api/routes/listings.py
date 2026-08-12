@@ -10,8 +10,10 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import asc
 from sqlmodel import Session, func, select
 
+from carcatcher.config import get_settings
 from carcatcher.db.engine import get_session
 from carcatcher.db.models import Listing, ListingStatus
+from carcatcher.geocoding import haversine_km
 
 router = APIRouter()
 
@@ -33,6 +35,7 @@ class ListingRead(BaseModel):
     mileage_km: int | None
     year: int | None
     power_kw: int | None
+    battery_kwh: float | None
     condition: str
     location: str | None
     title: str
@@ -40,10 +43,27 @@ class ListingRead(BaseModel):
     status: str
     first_seen_at: datetime
     last_seen_at: datetime
+    distance_km: float | None = None
 
 
 class TagUpdate(BaseModel):
     tag: TagValue | None
+
+
+def _to_read(listing: Listing) -> ListingRead:
+    """Build the API representation of `listing`, computing `distance_km` from
+    its coordinates against the fixed home point — never stored, always
+    derived, so it can't go stale if the home point ever changes."""
+    read = ListingRead.model_validate(listing)
+    if listing.latitude is not None and listing.longitude is not None:
+        settings = get_settings()
+        read.distance_km = round(
+            haversine_km(
+                listing.latitude, listing.longitude, settings.home_latitude, settings.home_longitude
+            ),
+            1,
+        )
+    return read
 
 
 @router.get("/listings", response_model=list[ListingRead])
@@ -75,7 +95,7 @@ def list_listings(
         .order_by(Listing.price_eur.is_(None), asc(Listing.price_eur), Listing.id)
     )
     items = session.exec(stmt).all()
-    return [ListingRead.model_validate(i) for i in items]
+    return [_to_read(i) for i in items]
 
 
 @router.patch("/listings/{listing_id}/tag", response_model=ListingRead)
@@ -89,4 +109,4 @@ def set_listing_tag(
     session.add(listing)
     session.commit()
     session.refresh(listing)
-    return ListingRead.model_validate(listing)
+    return _to_read(listing)

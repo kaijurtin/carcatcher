@@ -76,3 +76,15 @@ def test_fetch_listings_paginates_using_page_max():
     parser = VwDeParser()
     listings = parser.fetch_listings("id4")
     assert len(listings) == 4
+
+
+def test_battery_kwh_parsed_from_subtitle_when_present():
+    data = _data()
+    data["cars"][0]["subtitle"]["value"] = "ID.4 Pro 77 kWh NAV"
+    listings = parse_search_response(data, "id4")
+    assert listings[0].battery_kwh == 77.0
+
+
+def test_battery_kwh_is_none_when_no_kwh_mentioned():
+    listings = parse_search_response(_data(), "id4")
+    assert all(l.battery_kwh is None for l in listings)

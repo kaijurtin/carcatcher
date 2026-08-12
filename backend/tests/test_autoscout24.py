@@ -83,3 +83,15 @@ def test_fetch_listings_paginates_until_an_empty_page():
     parser = AutoScout24Parser()
     listings = parser.fetch_listings("id4")
     assert len(listings) == 3
+
+
+def test_battery_kwh_parsed_from_trim_when_present():
+    listings = parse_search_html(_html(), "id4")
+    battery_listing = next(l for l in listings if "82 kWh" in l.trim)
+    assert battery_listing.battery_kwh == 82.0
+
+
+def test_battery_kwh_is_none_when_trim_has_no_match():
+    listings = parse_search_html(_html(), "id4")
+    first = listings[0]
+    assert first.battery_kwh is None

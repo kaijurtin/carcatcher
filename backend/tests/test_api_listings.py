@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlmodel import Session
 
 from carcatcher.db.models import Listing
@@ -120,3 +121,41 @@ def test_patch_tag_accepts_every_allowed_value(client, test_engine):
         resp = client.patch(f"/api/listings/{listing_id}/tag", json={"tag": value})
         assert resp.status_code == 200, value
         assert resp.json()["tag"] == value
+
+
+def test_battery_kwh_included_in_response(client, test_engine):
+    _seed(test_engine, source_id="1", battery_kwh=82.0)
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["battery_kwh"] == 82.0
+
+
+def test_battery_kwh_defaults_to_null(client, test_engine):
+    _seed(test_engine, source_id="1")
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["battery_kwh"] is None
+
+
+def test_distance_km_is_null_without_coordinates(client, test_engine):
+    _seed(test_engine, source_id="1")
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["distance_km"] is None
+
+
+def test_distance_km_is_zero_at_the_home_point(client, test_engine):
+    from carcatcher.config import get_settings
+
+    settings = get_settings()
+    _seed(
+        test_engine, source_id="1",
+        latitude=settings.home_latitude, longitude=settings.home_longitude,
+    )
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["distance_km"] == 0.0
+
+
+def test_distance_km_computed_from_coordinates(client, test_engine):
+    # Berlin, ~584 km from the fixed home point (66663 Merzig) — sanity-checks
+    # that a real, non-zero coordinate pair produces a plausible distance.
+    _seed(test_engine, source_id="1", latitude=52.5200, longitude=13.4050)
+    resp = client.get("/api/listings")
+    assert resp.json()[0]["distance_km"] == pytest.approx(584.4, abs=1.0)

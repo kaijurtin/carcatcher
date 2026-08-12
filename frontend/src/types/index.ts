@@ -9,8 +9,10 @@ export interface Listing {
   mileage_km: number | null;
   year: number | null;
   power_kw: number | null;
+  battery_kwh: number | null;
   condition: string;
   location: string | null;
+  distance_km: number | null;
   title: string;
   tag: string | null;
   status: string;

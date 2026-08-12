@@ -22,6 +22,7 @@ class RawListing:
     mileage_km: int | None
     year: int | None
     power_kw: int | None
+    battery_kwh: float | None
     condition: str  # "new" | "used"
     location: str | None
     title: str
