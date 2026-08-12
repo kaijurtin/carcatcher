@@ -14,8 +14,10 @@ const listing: Listing = {
   mileage_km: 10937,
   year: 2025,
   power_kw: 125,
+  battery_kwh: null,
   condition: "used",
   location: "Berlin",
+  distance_km: null,
   title: "VW ID.4 Pro",
   tag: null,
   status: "active",
@@ -215,5 +217,54 @@ describe("ListingsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sort by Trim" }), { shiftKey: true });
     expect(screen.getByRole("button", { name: "Sort by Price" }).textContent).toContain("①");
     expect(screen.getByRole("button", { name: "Sort by Trim" }).textContent).toContain("②");
+  });
+
+  it("renders battery capacity and distance when present", () => {
+    render(
+      <ListingsTable
+        items={[{ ...listing, battery_kwh: 82, distance_km: 12.3 }]}
+        filters={{}}
+        onFilterChange={noop}
+        onTagChange={noop}
+      />,
+    );
+    expect(screen.getByText("82 kWh")).toBeInTheDocument();
+    expect(screen.getByText("12 km")).toBeInTheDocument();
+  });
+
+  it("shows — for battery capacity and distance when null", () => {
+    render(<ListingsTable items={[listing]} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent);
+    expect(cells.filter((c) => c === "—")).toHaveLength(2);
+  });
+
+  it("sorts by Battery with nulls last", () => {
+    const batteryListings: Listing[] = [
+      { ...listing, id: 1, trim: "Charlie", battery_kwh: 82 },
+      { ...listing, id: 2, trim: "Alpha", battery_kwh: null },
+      { ...listing, id: 3, trim: "Bravo", battery_kwh: 58 },
+    ];
+    render(<ListingsTable items={batteryListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Battery" }));
+    const order = rowTrims();
+    expect(order[0]).toContain("Bravo"); // 58
+    expect(order[1]).toContain("Charlie"); // 82
+    expect(order[2]).toContain("Alpha"); // null, last
+  });
+
+  it("sorts by Distance with nulls last", () => {
+    const distanceListings: Listing[] = [
+      { ...listing, id: 1, trim: "Charlie", distance_km: 500 },
+      { ...listing, id: 2, trim: "Alpha", distance_km: null },
+      { ...listing, id: 3, trim: "Bravo", distance_km: 12 },
+    ];
+    render(<ListingsTable items={distanceListings} filters={{}} onFilterChange={noop} onTagChange={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Distance" }));
+    const order = rowTrims();
+    expect(order[0]).toContain("Bravo"); // 12
+    expect(order[1]).toContain("Charlie"); // 500
+    expect(order[2]).toContain("Alpha"); // null, last
   });
 });

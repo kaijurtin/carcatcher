@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Listing } from "../types";
-import { formatKm, formatPrice, formatYear } from "../lib/format";
+import { formatBatteryKwh, formatDistanceKm, formatKm, formatPrice, formatYear } from "../lib/format";
 
 export const SOURCE_LABEL: Record<string, string> = {
   vw: "VW.de",
@@ -46,8 +46,10 @@ type SortField =
   | "mileage_km"
   | "year"
   | "power_kw"
+  | "battery_kwh"
   | "condition"
   | "location"
+  | "distance_km"
   | "source";
 
 interface SortKey {
@@ -133,8 +135,10 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
             <SortableHeader label="KM" field="mileage_km" sort={sort} onSort={onSort} />
             <SortableHeader label="Year" field="year" sort={sort} onSort={onSort} />
             <SortableHeader label="Power" field="power_kw" sort={sort} onSort={onSort} />
+            <SortableHeader label="Battery" field="battery_kwh" sort={sort} onSort={onSort} />
             <SortableHeader label="Condition" field="condition" sort={sort} onSort={onSort} />
             <SortableHeader label="Location" field="location" sort={sort} onSort={onSort} />
+            <SortableHeader label="Distance" field="distance_km" sort={sort} onSort={onSort} />
             <SortableHeader label="Source" field="source" sort={sort} onSort={onSort} />
             <th className="px-4 py-3 font-medium">Tag</th>
             <th className="px-4 py-3 font-medium" />
@@ -190,6 +194,8 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
             <th className="px-4 py-2" />
             <th className="px-4 py-2" />
             <th className="px-4 py-2" />
+            <th className="px-4 py-2" />
+            <th className="px-4 py-2" />
             <th className="px-4 py-2">
               <select
                 aria-label="Filter source"
@@ -211,7 +217,7 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
         <tbody className="divide-y divide-slate-100">
           {items.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-4 py-12 text-center text-slate-500">
+              <td colSpan={13} className="px-4 py-12 text-center text-slate-500">
                 No listings match these filters.
               </td>
             </tr>
@@ -232,12 +238,14 @@ export function ListingsTable({ items, filters, onFilterChange, onTagChange }: L
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {l.power_kw != null ? `${l.power_kw} kW` : "—"}
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatBatteryKwh(l.battery_kwh)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                   {CONDITION_LABEL[l.condition] ?? l.condition}
                 </td>
                 <td className="max-w-[12rem] px-4 py-3 text-slate-600">
                   <span className="line-clamp-1">{l.location ?? "—"}</span>
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDistanceKm(l.distance_km)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-500">
                   {SOURCE_LABEL[l.source] ?? l.source}
                 </td>
